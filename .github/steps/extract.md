@@ -36,13 +36,37 @@ The work item JSON file named in the chat. It contains:
    | `status = "PENDING_APPROVAL"` | An order above the approval limit shall stay pending until a manager approves it. |
 
 8. Describe who uses the flow and what surrounds it:
-   - `users_and_roles`: who uses this flow and what each role is allowed to do. Take it only from what the code shows (a permission check, a role name, a user type) or from the notes of the business team. Set `roles_basis` to `stated`, `inferred` or `unknown`. If the code shows nothing, write one entry with the role "Not known from the code", set `roles_basis` to `unknown` and add a question to `flow_questions_for_sme`.
+   - `users_and_roles`: who uses this flow and what each role is allowed to do. Take it only from what the code shows (a permission check, a role name, a user type) or from the notes of the business team. Set `roles_basis` to `stated`, `inferred` or `unknown`. If the code shows nothing, write one entry with the role "Not known from the code" and set `roles_basis` to `unknown`. Do not add a question for it: the document asks the SME once for the whole module.
    - `preconditions`: what must be true before the flow can run, for example "The customer exists and is active". Write "None found in the code" if there is none.
    - `outputs`: what comes out, in business names, for example "Total amount to collect, rounded to 2 decimals".
 9. Go through `items_to_cover` one by one. Each `id` must appear either in the `covers` list of one rule, or in `no_business_rule` with a reason (for example: technical check, logging, closing a database connection).
 10. Write the result to the path in `rules_file`, in the format below.
 11. Run `python explain.py validate <work item id>`. If it reports problems, fix the rules file and run it again until it passes.
 12. Reply with a short summary: number of requirements, number of scenarios, number of rules, number of unclear rules, and the questions for the SME.
+
+## Keep it short
+
+A long document is not read. The validator rejects a file that goes over these limits.
+
+| What | Limit |
+|---|---|
+| `flow_summary` | 60 words |
+| `flow_purpose`, `starts_when` | 40 words each |
+| Text of one flow box | 12 words |
+| One requirement | 45 words, and the word "shall" once only. If it says two things, write two requirements. |
+| Rule `title` | 10 words |
+| `what_it_does` | 40 words |
+| `business_reason` | 35 words |
+| `how_it_is_calculated` | 45 words |
+| `when_it_applies` | 6 conditions, 25 words each |
+| Steps of one example | 6 |
+| Scenarios in one file | 10 |
+| Scenario `title` | 10 words; `outcome` and `user_sees` 30 words each |
+| Questions for the SME | 3 for each rule and 3 for the flow, 35 words each. Ask only what the SME must decide. |
+
+Two more rules:
+- Every `decision` box names the rule that describes it in `rules`.
+- Code with no business behaviour (every item goes to `no_business_rule`, so there are no rules and no requirements) gets the short form: three boxes (start, one step, end), one `main` scenario, and no more than one question.
 
 ## Output format
 ```json
@@ -131,8 +155,7 @@ Rules for the format:
 - `flow_steps`: `id` is one capital letter and a number (`S1`, `E1`). `kind` is `start`, `step`, `decision` or `end`. A `start` and a `step` have `next`. A `decision` has two or more `branches`, each with a `label` and a `to`. An `end` has neither. One `start` for each entry point. At most 25 boxes.
 - `scenarios`: `path` lists the box ids in order. It begins at a `start` box, follows the arrows, and stops at an `end` box. `type` is `main`, `alternate` or `exception`. An `alternate` or `exception` scenario also has `user_sees`.
 - `requirements`: `id` is the work item id plus `-FR1`, `-FR2`, and so on. `text` is one "shall" statement. `rules` lists the rule ids it rests on. A file with no rules has no requirements.
-- `users_and_roles`: each entry has `role` and `allowed_to`. `roles_basis` is `stated`, `inferred` or `unknown`. With `unknown`, add a question to `flow_questions_for_sme`.
-- `flow_questions_for_sme`: questions about the flow as a whole. Questions about one rule go into that rule.
+- `users_and_roles`: each entry has `role` and `allowed_to`. `roles_basis` is `stated`, `inferred` or `unknown`. - `flow_questions_for_sme`: questions about the flow as a whole. Questions about one rule go into that rule.
 - `how_it_is_calculated`: write "No calculation" if the rule only decides something.
 - `values_used`: `comes_from` is one of `input`, `database`, `fixed`, `calculated`, `config`, `other_module`, `system`. For `config` give the setting name and its value, not the file name (the file goes into `sources`). For `database` give table and column. For `fixed` give the exact value from the code. For `calculated` give the formula.
 - `reason_basis` is `stated`, `inferred` or `unknown`. With `unknown`, add a question to `questions_for_sme`.

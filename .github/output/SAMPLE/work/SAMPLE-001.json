@@ -1,0 +1,129 @@
+{
+  "id": "SAMPLE-001",
+  "module": "SAMPLE",
+  "kind": "flow",
+  "source_root": "E:/Chiru/AIStuff/code-explainer/.github",
+  "entry_points": [
+    {
+      "method": "InvProc.procA",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "start_line": 11,
+      "end_line": 24
+    }
+  ],
+  "methods_to_document": [
+    {
+      "method": "InvProc.procA",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "start_line": 11,
+      "end_line": 24
+    },
+    {
+      "method": "Calc2.calcAmt2",
+      "file": "sample/src/com/acme/ar/Calc2.java",
+      "start_line": 6,
+      "end_line": 9
+    },
+    {
+      "method": "CustDao.find",
+      "file": "sample/src/com/acme/ar/CustDao.java",
+      "start_line": 8,
+      "end_line": 26
+    },
+    {
+      "method": "InvProc.tx",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "start_line": 26,
+      "end_line": 35
+    },
+    {
+      "method": "Util.days",
+      "file": "sample/src/com/acme/ar/Util.java",
+      "start_line": 6,
+      "end_line": 9
+    }
+  ],
+  "context_methods": [],
+  "calls_to_other_modules": [],
+  "items_to_cover": [
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:13:if",
+      "kind": "if",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 13,
+      "text": "if (c == null) {"
+    },
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:18:ternary",
+      "kind": "ternary",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 18,
+      "text": "int grace = \"G\".equals(c.typ) ? 15 : 5;"
+    },
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:19:if",
+      "kind": "if",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 19,
+      "text": "if (d > grace && !c.exFlg) {"
+    },
+    {
+      "id": "sample/src/com/acme/ar/Calc2.java:6:method",
+      "kind": "method",
+      "file": "sample/src/com/acme/ar/Calc2.java",
+      "line": 6,
+      "text": "public BigDecimal calcAmt2(BigDecimal amt, BigDecimal rt, long d) {"
+    },
+    {
+      "id": "sample/src/com/acme/ar/CustDao.java:11:sql",
+      "kind": "sql",
+      "file": "sample/src/com/acme/ar/CustDao.java",
+      "line": 11,
+      "text": "\"SELECT TYP, RT, REG, EXEMPT_FLG FROM CUST_MASTER WHERE CUST_ID = ? AND STS = 'A'\");"
+    },
+    {
+      "id": "sample/src/com/acme/ar/CustDao.java:14:if",
+      "kind": "if",
+      "file": "sample/src/com/acme/ar/CustDao.java",
+      "line": 14,
+      "text": "if (!rs.next()) {"
+    },
+    {
+      "id": "sample/src/com/acme/ar/CustDao.java:23:catch",
+      "kind": "catch",
+      "file": "sample/src/com/acme/ar/CustDao.java",
+      "line": 23,
+      "text": "} catch (SQLException e) {"
+    },
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:28:case",
+      "kind": "case",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 28,
+      "text": "case 1:"
+    },
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:30:case",
+      "kind": "case",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 30,
+      "text": "case 2:"
+    },
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:32:case",
+      "kind": "case",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 32,
+      "text": "default:"
+    },
+    {
+      "id": "sample/src/com/acme/ar/Util.java:8:ternary",
+      "kind": "ternary",
+      "file": "sample/src/com/acme/ar/Util.java",
+      "line": 8,
+      "text": "return ms <= 0 ? 0 : ms / 86400000L;"
+    }
+  ],
+  "rules_file": "output/SAMPLE/rules/SAMPLE-001.json",
+  "verify_file": "output/SAMPLE/verify/SAMPLE-001.json"
+}

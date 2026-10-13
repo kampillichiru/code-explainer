@@ -1,0 +1,65 @@
+[
+  {
+    "id": "SAMPLE-001",
+    "kind": "flow",
+    "entry_points": [
+      "InvProc.procA"
+    ],
+    "title": "Amount owed on an invoice",
+    "summary": "Works out the total a customer owes on one invoice. It adds late payment interest when the invoice is paid late enough, then adds regional tax, and rounds the total to 2 decimals. It rejects unknown or inactive customers.",
+    "purpose": "Give the customer a correct total to collect on an invoice, including late payment interest and regional tax. Business team notes state this.",
+    "starts_when": "Each time the amount owed on an invoice is requested, with the customer, amount, due date and processing date.",
+    "ends": [
+      "Rejected: no customer",
+      "Total owed is returned"
+    ]
+  },
+  {
+    "id": "SAMPLE-002",
+    "kind": "unreached",
+    "entry_points": [
+      "InvProc.oldPost"
+    ],
+    "title": "Old posting check for negative amounts",
+    "summary": "An old routine receives an amount and writes the text \"neg\" to the console when the amount is below zero. It changes no amount, saves nothing and returns nothing. No other code in this module calls it.",
+    "purpose": "Not known from the code",
+    "starts_when": "Never in this module: no other code calls it.",
+    "ends": [
+      "Nothing is returned or saved"
+    ]
+  },
+  {
+    "id": "SAMPLE-003",
+    "kind": "flow",
+    "entry_points": [
+      "(settings)"
+    ],
+    "title": "Statement day and reminder letter settings",
+    "summary": "Settings fix the day of the month for customer statements and control reminder letters: whether they are sent, the smallest balance that gets one, and the days late at which letters go out.",
+    "purpose": "Lets the business set when statements are produced and when overdue customers are reminded, without changing code. The business team describes these as reminder letter settings.",
+    "starts_when": "Each time the accounts receivable module reads its settings, for statements and reminder letters.",
+    "ends": [
+      "No reminder letters are sent",
+      "No letter: balance below minimum",
+      "Letters are sent on schedule"
+    ]
+  },
+  {
+    "id": "SAMPLE-004",
+    "kind": "flow",
+    "entry_points": [
+      "PROCEDURE ar_writeoff_small",
+      "(script)"
+    ],
+    "title": "Write off small balances and deactivate dormant customers",
+    "summary": "A nightly run writes off small, long-overdue open invoices, but stops and undoes everything if more than 1,000 would be written off. A separate script marks customers inactive when they have had no invoice for 36 months.",
+    "purpose": "Clean up balances too small to chase and customers who no longer trade. The business team states small old balances are written off; the reason for deactivating customers is not known from the code.",
+    "starts_when": "The nightly write-off procedure is run with a run date; the customer script is run on its own, with no trigger shown in the code.",
+    "ends": [
+      "Rejected: write-offs undone, error raised",
+      "Small balances are written off",
+      "Failed: changes undone, error passed on",
+      "Dormant customers are marked inactive"
+    ]
+  }
+]

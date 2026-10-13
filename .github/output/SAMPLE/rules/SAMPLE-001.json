@@ -1,0 +1,242 @@
+{
+  "work_item": "SAMPLE-001",
+  "flow_title": "Amount owed on an invoice",
+  "flow_summary": "Works out the total a customer owes on one invoice. It adds late payment interest when the invoice is paid late enough, then adds regional tax, and rounds the total to 2 decimals. It rejects unknown or inactive customers.",
+  "flow_purpose": "Give the customer a correct total to collect on an invoice, including late payment interest and regional tax. Business team notes state this.",
+  "starts_when": "Each time the amount owed on an invoice is requested, with the customer, amount, due date and processing date.",
+  "inputs": ["Customer id", "Invoice amount", "Due date", "Processing date"],
+  "outputs": ["Total amount owed, rounded to 2 decimals"],
+  "users_and_roles": [{"role": "Not known from the code", "allowed_to": "Not known from the code"}],
+  "roles_basis": "unknown",
+  "preconditions": ["The customer exists in the customer master with status 'A' (active)."],
+  "flow_questions_for_sme": ["Who or what starts this calculation: a user screen, a batch job or another system?"],
+  "flow_steps": [
+    {"id": "S1", "kind": "start", "text": "Invoice amount is requested", "next": "S2"},
+    {"id": "S2", "kind": "decision", "text": "Is the customer found and active?", "rules": ["SAMPLE-001-R1"],
+     "branches": [{"label": "Yes", "to": "S3"}, {"label": "No", "to": "E1"}]},
+    {"id": "S3", "kind": "step", "text": "Count the days late", "rules": ["SAMPLE-001-R2"], "next": "S4"},
+    {"id": "S4", "kind": "decision", "text": "Later than free days and not exempt?", "rules": ["SAMPLE-001-R3"],
+     "branches": [{"label": "Yes", "to": "S5"}, {"label": "No", "to": "S6"}]},
+    {"id": "S5", "kind": "step", "text": "Add late payment interest", "rules": ["SAMPLE-001-R4"], "next": "S6"},
+    {"id": "S6", "kind": "step", "text": "Add regional tax and round the total", "rules": ["SAMPLE-001-R5"], "next": "E2"},
+    {"id": "E1", "kind": "end", "text": "Rejected: no customer"},
+    {"id": "E2", "kind": "end", "text": "Total owed is returned"}
+  ],
+  "scenarios": [
+    {
+      "id": "SAMPLE-001-SC1",
+      "title": "Invoice paid late, interest and tax added",
+      "type": "main",
+      "when": ["The customer is active and not exempt.", "The invoice is more than the free days late."],
+      "path": ["S1", "S2", "S3", "S4", "S5", "S6", "E2"],
+      "outcome": "The total is the invoice amount plus interest plus regional tax, rounded to 2 decimals.",
+      "example": {
+        "inputs": {"Invoice amount": "10,000.00", "Yearly rate": "12% (0.12)", "Days late": "30", "Customer type": "not G", "Region": "1"},
+        "steps": ["30 is more than 5 free days, customer not exempt", "Interest = 10,000.00 x (0.12 / 365) x 30 = 98.63013", "Tax = 10,000.00 x 0.18 = 1,800.00", "Total = 10,000.00 + 98.63013 + 1,800.00 = 11,898.63013"],
+        "result": "Total = 11,898.63"
+      }
+    },
+    {
+      "id": "SAMPLE-001-SC2",
+      "title": "Invoice not late enough or customer exempt",
+      "type": "alternate",
+      "when": ["The customer is active.", "The days late do not exceed the free days, or the customer is exempt."],
+      "path": ["S1", "S2", "S3", "S4", "S6", "E2"],
+      "outcome": "No interest is added. The total is the invoice amount plus regional tax.",
+      "user_sees": "The total owed, rounded to 2 decimals, with no interest.",
+      "example": {
+        "inputs": {"Invoice amount": "2,000.00", "Days late": "10", "Customer type": "G", "Region": "2"},
+        "steps": ["Government customer: 15 free days", "10 is not more than 15, so no interest", "Tax = 2,000.00 x 0.05 = 100.00"],
+        "result": "Total = 2,100.00"
+      }
+    },
+    {
+      "id": "SAMPLE-001-SC3",
+      "title": "Customer not found or inactive",
+      "type": "exception",
+      "when": ["No customer with this id has status 'A', or the customer lookup fails."],
+      "path": ["S1", "S2", "E1"],
+      "outcome": "The request is rejected and no total is calculated.",
+      "user_sees": "An error with the message text \"no customer\".",
+      "example": {
+        "inputs": {"Customer id": "C999 (not in the customer master)", "Invoice amount": "500.00"},
+        "steps": ["Lookup finds no active customer", "Request is rejected"],
+        "result": "Error: no customer"
+      }
+    }
+  ],
+  "requirements": [
+    {"id": "SAMPLE-001-FR1", "text": "The system shall reject an invoice request with the message \"no customer\" when no customer with status 'A' is found.", "rules": ["SAMPLE-001-R1"]},
+    {"id": "SAMPLE-001-FR2", "text": "The system shall treat a failed customer lookup in the same way as a customer that is not found.", "rules": ["SAMPLE-001-R1"]},
+    {"id": "SAMPLE-001-FR3", "text": "The system shall count the days late as whole days from the due date to the processing date, and as 0 days when the processing date is not after the due date.", "rules": ["SAMPLE-001-R2"]},
+    {"id": "SAMPLE-001-FR4", "text": "The system shall allow 15 free days for customers of type 'G' and 5 free days for all other customers.", "rules": ["SAMPLE-001-R3"]},
+    {"id": "SAMPLE-001-FR5", "text": "The system shall add late payment interest only when the days late are more than the free days and the customer is not marked exempt.", "rules": ["SAMPLE-001-R3"]},
+    {"id": "SAMPLE-001-FR6", "text": "The system shall calculate late payment interest as the invoice amount x the customer's yearly rate / 365 x days late.", "rules": ["SAMPLE-001-R4"]},
+    {"id": "SAMPLE-001-FR7", "text": "The system shall add regional tax of 18% of the invoice amount for region 1, 5% for region 2, and none for any other region.", "rules": ["SAMPLE-001-R5"]},
+    {"id": "SAMPLE-001-FR8", "text": "The system shall round the total owed to 2 decimals, with halves rounded up.", "rules": ["SAMPLE-001-R5"]}
+  ],
+  "rules": [
+    {
+      "id": "SAMPLE-001-R1",
+      "title": "Only active customers are processed",
+      "what_it_does": "Reads the customer's type, yearly rate, region and exempt flag from the customer master. Only customers with status 'A' are found. If none is found, or the read fails, the request is rejected.",
+      "business_reason": "Amounts are calculated only for active customers. A database failure is handled as 'not found'.",
+      "reason_basis": "inferred",
+      "when_it_applies": ["Every time an invoice amount is requested."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Customer id", "value": "Id of the customer on the invoice", "comes_from": "input"},
+        {"name": "Customer status", "value": "CUST_MASTER.STS must be 'A'", "comes_from": "database"},
+        {"name": "Customer type", "value": "CUST_MASTER.TYP", "comes_from": "database"},
+        {"name": "Yearly rate", "value": "CUST_MASTER.RT", "comes_from": "database"},
+        {"name": "Region", "value": "CUST_MASTER.REG", "comes_from": "database"},
+        {"name": "Exempt flag", "value": "CUST_MASTER.EXEMPT_FLG ('Y' means exempt)", "comes_from": "database"}
+      ],
+      "example": {
+        "inputs": {"Customer id": "C999", "Customer status": "no active row"},
+        "steps": ["Lookup returns no row", "Request is rejected with \"no customer\""],
+        "result": "Error: no customer"
+      },
+      "exceptions": ["A database error also gives 'no customer', so the user cannot tell the two cases apart."],
+      "sources": [
+        {"file": "sample/src/com/acme/ar/CustDao.java", "start_line": 8, "end_line": 26},
+        {"file": "sample/src/com/acme/ar/InvProc.java", "start_line": 12, "end_line": 15}
+      ],
+      "covers": [
+        "sample/src/com/acme/ar/InvProc.java:13:if",
+        "sample/src/com/acme/ar/CustDao.java:11:sql",
+        "sample/src/com/acme/ar/CustDao.java:14:if",
+        "sample/src/com/acme/ar/CustDao.java:23:catch"
+      ],
+      "status": "unclear",
+      "questions_for_sme": ["Is it right that a database failure is reported as 'no customer', or should it be a separate error?"]
+    },
+    {
+      "id": "SAMPLE-001-R2",
+      "title": "Count whole days late",
+      "what_it_does": "Counts how many whole days the processing date is after the due date. Gives 0 when the processing date is the same or earlier.",
+      "business_reason": "Interest depends on the number of days the payment is late.",
+      "reason_basis": "inferred",
+      "when_it_applies": ["Every time an invoice amount is requested for an active customer."],
+      "how_it_is_calculated": "(Processing date - due date) in milliseconds / 86,400,000, whole days only. 0 if the difference is 0 or less.",
+      "values_used": [
+        {"name": "Due date", "value": "Due date of the invoice", "comes_from": "input"},
+        {"name": "Processing date", "value": "Date the amount is requested for", "comes_from": "input"},
+        {"name": "Milliseconds in a day", "value": "86400000", "comes_from": "fixed"},
+        {"name": "Days late", "value": "(processing date - due date) / 86,400,000, whole days", "comes_from": "calculated"}
+      ],
+      "example": {
+        "inputs": {"Due date": "2026-01-01 00:00", "Processing date": "2026-01-31 18:00"},
+        "steps": ["Difference = 30 days 18 hours", "Whole days only: 30"],
+        "result": "Days late = 30"
+      },
+      "exceptions": ["The time of day counts: 29 days 23 hours gives 29 days, not 30."],
+      "sources": [{"file": "sample/src/com/acme/ar/Util.java", "start_line": 6, "end_line": 9}],
+      "covers": ["sample/src/com/acme/ar/Util.java:8:ternary"],
+      "status": "clear",
+      "questions_for_sme": []
+    },
+    {
+      "id": "SAMPLE-001-R3",
+      "title": "When late payment interest is due",
+      "what_it_does": "Gives government customers (type 'G') 15 free days and others 5 free days. Interest is due only when days late are more than the free days and the customer is not exempt.",
+      "business_reason": "Short delays are not charged, and exempt customers are never charged interest.",
+      "reason_basis": "inferred",
+      "when_it_applies": ["The customer is active.", "Days late are more than the free days.", "The customer is not marked exempt."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Customer type", "value": "CUST_MASTER.TYP", "comes_from": "database"},
+        {"name": "Free days, type 'G'", "value": "15", "comes_from": "fixed"},
+        {"name": "Free days, other types", "value": "5", "comes_from": "fixed"},
+        {"name": "Exempt flag", "value": "CUST_MASTER.EXEMPT_FLG = 'Y'", "comes_from": "database"},
+        {"name": "Days late", "value": "From the day count rule", "comes_from": "calculated"}
+      ],
+      "example": {
+        "inputs": {"Customer type": "G", "Days late": "10", "Exempt": "No"},
+        "steps": ["Type 'G': 15 free days", "10 is not more than 15", "No interest"],
+        "result": "No interest is added"
+      },
+      "exceptions": ["Exactly 5 days late (15 for type 'G') gives no interest."],
+      "sources": [{"file": "sample/src/com/acme/ar/InvProc.java", "start_line": 18, "end_line": 21}],
+      "covers": [
+        "sample/src/com/acme/ar/InvProc.java:18:ternary",
+        "sample/src/com/acme/ar/InvProc.java:19:if"
+      ],
+      "status": "clear",
+      "questions_for_sme": []
+    },
+    {
+      "id": "SAMPLE-001-R4",
+      "title": "Late payment interest amount",
+      "what_it_does": "Calculates simple interest on the invoice amount for the days late, using the customer's yearly rate, and adds it to the total.",
+      "business_reason": "Customers who pay late are charged interest for the delay. Business team notes state late payment interest is calculated.",
+      "reason_basis": "stated",
+      "when_it_applies": ["Interest is due under the rule on when late payment interest is due."],
+      "how_it_is_calculated": "Yearly rate / 365, rounded to 10 decimals (halves up), x invoice amount x days late. The interest itself is not rounded here.",
+      "values_used": [
+        {"name": "Invoice amount", "value": "Amount of the invoice", "comes_from": "input"},
+        {"name": "Yearly rate", "value": "CUST_MASTER.RT", "comes_from": "database"},
+        {"name": "Days in a year", "value": "365", "comes_from": "fixed"},
+        {"name": "Rate per day", "value": "Yearly rate / 365, 10 decimals", "comes_from": "calculated"},
+        {"name": "Interest", "value": "Invoice amount x rate per day x days late", "comes_from": "calculated"}
+      ],
+      "example": {
+        "inputs": {"Invoice amount": "10,000.00", "Yearly rate": "0.12", "Days late": "30"},
+        "steps": ["0.12 / 365 = 0.0003287671 per day", "10,000.00 x 0.0003287671 = 3.287671", "3.287671 x 30 = 98.63013"],
+        "result": "Interest = 98.63013 (98.63 after final rounding)"
+      },
+      "exceptions": [],
+      "sources": [
+        {"file": "sample/src/com/acme/ar/Calc2.java", "start_line": 6, "end_line": 9},
+        {"file": "sample/src/com/acme/ar/InvProc.java", "start_line": 20, "end_line": 20}
+      ],
+      "covers": ["sample/src/com/acme/ar/Calc2.java:6:method"],
+      "status": "unclear",
+      "questions_for_sme": ["Is the yearly rate stored as a decimal (0.12 for 12%)? The code uses it as is, without dividing by 100."]
+    },
+    {
+      "id": "SAMPLE-001-R5",
+      "title": "Regional tax and rounded total",
+      "what_it_does": "Adds regional tax on the invoice amount: 18% for region 1, 5% for region 2, none for other regions. Then rounds the total to 2 decimals.",
+      "business_reason": "Regional tax is added to what the customer owes. Business team notes state this. Meaning of the region codes is not shown.",
+      "reason_basis": "stated",
+      "when_it_applies": ["Always, for every active customer, whether the invoice is late or not."],
+      "how_it_is_calculated": "Total = invoice amount + interest (if due) + invoice amount x tax rate for the region. Rounded to 2 decimals, halves up. Tax is on the invoice amount only, not on interest.",
+      "values_used": [
+        {"name": "Region", "value": "CUST_MASTER.REG", "comes_from": "database"},
+        {"name": "Tax rate, region 1", "value": "0.18", "comes_from": "fixed"},
+        {"name": "Tax rate, region 2", "value": "0.05", "comes_from": "fixed"},
+        {"name": "Tax rate, other regions", "value": "0", "comes_from": "fixed"},
+        {"name": "Total", "value": "Invoice amount + interest + tax, 2 decimals", "comes_from": "calculated"}
+      ],
+      "example": {
+        "inputs": {"Invoice amount": "2,000.00", "Region": "2", "Interest": "0"},
+        "steps": ["Tax = 2,000.00 x 0.05 = 100.00", "Total = 2,000.00 + 0 + 100.00 = 2,100.00"],
+        "result": "Total = 2,100.00"
+      },
+      "exceptions": ["Exempt customers still pay regional tax; the exempt flag only stops interest."],
+      "sources": [
+        {"file": "sample/src/com/acme/ar/InvProc.java", "start_line": 22, "end_line": 23},
+        {"file": "sample/src/com/acme/ar/InvProc.java", "start_line": 26, "end_line": 35}
+      ],
+      "covers": [
+        "sample/src/com/acme/ar/InvProc.java:28:case",
+        "sample/src/com/acme/ar/InvProc.java:30:case",
+        "sample/src/com/acme/ar/InvProc.java:32:case"
+      ],
+      "status": "unclear",
+      "questions_for_sme": ["What do region codes 1 and 2 stand for, and should other regions really pay no tax?"]
+    }
+  ],
+  "no_business_rule": [],
+  "glossary": [
+    {"technical_name": "procA", "business_meaning": "Work out the total owed on an invoice"},
+    {"technical_name": "calcAmt2", "business_meaning": "Late payment interest amount"},
+    {"technical_name": "tx", "business_meaning": "Regional tax amount"},
+    {"technical_name": "exFlg / EXEMPT_FLG", "business_meaning": "Customer is exempt from late payment interest"},
+    {"technical_name": "typ / TYP", "business_meaning": "Customer type; 'G' gets longer free days"},
+    {"technical_name": "rt / RT", "business_meaning": "Customer's yearly interest rate"},
+    {"technical_name": "reg / REG", "business_meaning": "Customer's tax region code"},
+    {"technical_name": "STS", "business_meaning": "Customer status; 'A' means active"}
+  ]
+}

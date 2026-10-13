@@ -1,0 +1,9 @@
+{
+  "module": "SAMPLE",
+  "files": 7,
+  "methods": 10,
+  "trivial_methods": 1,
+  "work_items": 4,
+  "items_to_cover": 19,
+  "files_not_parsed": {}
+}

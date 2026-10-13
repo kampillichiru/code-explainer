@@ -1,0 +1,82 @@
+{
+  "id": "SAMPLE-004",
+  "module": "SAMPLE",
+  "kind": "flow",
+  "source_root": "E:/Chiru/AIStuff/code-explainer/.github",
+  "entry_points": [
+    {
+      "method": "PROCEDURE ar_writeoff_small",
+      "file": "sample/db/ar_writeoff.sql",
+      "start_line": 2,
+      "end_line": 22
+    },
+    {
+      "method": "(script)",
+      "file": "sample/db/ar_writeoff.sql",
+      "start_line": 23,
+      "end_line": 24
+    }
+  ],
+  "methods_to_document": [
+    {
+      "method": "PROCEDURE ar_writeoff_small",
+      "file": "sample/db/ar_writeoff.sql",
+      "start_line": 2,
+      "end_line": 22
+    },
+    {
+      "method": "(script)",
+      "file": "sample/db/ar_writeoff.sql",
+      "start_line": 23,
+      "end_line": 24
+    }
+  ],
+  "context_methods": [],
+  "calls_to_other_modules": [],
+  "items_to_cover": [
+    {
+      "id": "sample/db/ar_writeoff.sql:2:sql",
+      "kind": "sql",
+      "file": "sample/db/ar_writeoff.sql",
+      "line": 2,
+      "text": "CREATE OR REPLACE PROCEDURE ar_writeoff_small(p_run_date IN DATE) AS"
+    },
+    {
+      "id": "sample/db/ar_writeoff.sql:5:sql",
+      "kind": "sql",
+      "file": "sample/db/ar_writeoff.sql",
+      "line": 5,
+      "text": "UPDATE AR_INVOICE"
+    },
+    {
+      "id": "sample/db/ar_writeoff.sql:12:if",
+      "kind": "if",
+      "file": "sample/db/ar_writeoff.sql",
+      "line": 12,
+      "text": "IF SQL%ROWCOUNT > 1000 THEN"
+    },
+    {
+      "id": "sample/db/ar_writeoff.sql:17:catch",
+      "kind": "catch",
+      "file": "sample/db/ar_writeoff.sql",
+      "line": 17,
+      "text": "EXCEPTION"
+    },
+    {
+      "id": "sample/db/ar_writeoff.sql:18:catch",
+      "kind": "catch",
+      "file": "sample/db/ar_writeoff.sql",
+      "line": 18,
+      "text": "WHEN OTHERS THEN"
+    },
+    {
+      "id": "sample/db/ar_writeoff.sql:24:sql",
+      "kind": "sql",
+      "file": "sample/db/ar_writeoff.sql",
+      "line": 24,
+      "text": "UPDATE CUST_MASTER SET STS = 'I' WHERE LAST_INV_DT < ADD_MONTHS(SYSDATE, -36) AND STS = 'A';"
+    }
+  ],
+  "rules_file": "output/SAMPLE/rules/SAMPLE-004.json",
+  "verify_file": "output/SAMPLE/verify/SAMPLE-004.json"
+}

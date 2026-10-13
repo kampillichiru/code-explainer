@@ -1,0 +1,35 @@
+{
+  "id": "SAMPLE-003",
+  "module": "SAMPLE",
+  "kind": "flow",
+  "source_root": "E:/Chiru/AIStuff/code-explainer/.github",
+  "entry_points": [
+    {
+      "method": "(settings)",
+      "file": "sample/config/ar.properties",
+      "start_line": 1,
+      "end_line": 11
+    }
+  ],
+  "methods_to_document": [
+    {
+      "method": "(settings)",
+      "file": "sample/config/ar.properties",
+      "start_line": 1,
+      "end_line": 11
+    }
+  ],
+  "context_methods": [],
+  "calls_to_other_modules": [],
+  "items_to_cover": [
+    {
+      "id": "sample/config/ar.properties:2:config",
+      "kind": "config",
+      "file": "sample/config/ar.properties",
+      "line": 2,
+      "text": "ar.statement.day.of.month=5"
+    }
+  ],
+  "rules_file": "output/SAMPLE/rules/SAMPLE-003.json",
+  "verify_file": "output/SAMPLE/verify/SAMPLE-003.json"
+}

@@ -315,7 +315,7 @@ def check_rules(work, rules_path):
         if not (g.get("technical_name") and g.get("business_meaning")):
             errors.append("glossary: each entry needs technical_name and business_meaning.")
     return errors + check_surroundings(data) + check_flow(data, work["id"], ids) \
-        + check_requirements(data, work["id"], ids)
+        + check_requirements(data, work["id"], ids) + check_sizes(data)
 
 
 NUMBER_RE = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
@@ -402,6 +402,8 @@ def check_flow(data, work_id, rule_ids):
             if rid not in rule_ids:
                 errors.append("flow_steps %s: rule '%s' is not in this file." % (sid, rid))
             linked.add(rid)
+        if kind == "decision" and rule_ids and not s.get("rules"):
+            errors.append("flow_steps %s: a decision needs the rule that describes it in 'rules'." % sid)
     kinds = [s.get("kind") for s in steps]
     if "start" not in kinds or "end" not in kinds:
         errors.append("flow_steps: needs at least one 'start' step and one 'end' step.")
@@ -459,6 +461,61 @@ def check_flow(data, work_id, rule_ids):
     return errors
 
 
+WORD_LIMITS = {"flow_summary": 60, "flow_purpose": 40, "starts_when": 40}
+RULE_WORD_LIMITS = {"title": 10, "what_it_does": 40, "business_reason": 35, "how_it_is_calculated": 45}
+SCENARIO_WORD_LIMITS = {"title": 10, "outcome": 30, "user_sees": 30}
+MAX_SCENARIOS, MAX_EXAMPLE_STEPS, MAX_QUESTIONS, MAX_CONDITIONS = 10, 6, 3, 6
+REQUIREMENT_WORDS, STEP_WORDS, QUESTION_WORDS, CONDITION_WORDS = 45, 12, 35, 25
+
+
+def check_sizes(data):
+    """A document nobody reads to the end is not reliable either: every kind of statement has a size limit."""
+    errors = []
+
+    def words(name, text, limit):
+        n = len(str(text or "").split())
+        if n > limit:
+            errors.append("%s has %d words. The limit is %d. Say it shorter." % (name, n, limit))
+
+    def count(name, entries, limit, what):
+        if len(entries or []) > limit:
+            errors.append("%s has %d %s. The limit is %d. Keep the ones that matter." % (name, len(entries), what, limit))
+
+    for field, limit in WORD_LIMITS.items():
+        words("'%s'" % field, data.get(field), limit)
+    count("'flow_questions_for_sme'", data.get("flow_questions_for_sme"), MAX_QUESTIONS, "questions")
+    for q in data.get("flow_questions_for_sme") or []:
+        words("A question in 'flow_questions_for_sme'", q, QUESTION_WORDS)
+    for s in data.get("flow_steps") or []:
+        if isinstance(s, dict):
+            words("flow_steps %s: 'text'" % s.get("id"), s.get("text"), STEP_WORDS)
+    for q in data.get("requirements") or []:
+        if isinstance(q, dict):
+            words("%s: 'text'" % q.get("id"), q.get("text"), REQUIREMENT_WORDS)
+    for r in data.get("rules") or []:
+        rid = r.get("id")
+        for field, limit in RULE_WORD_LIMITS.items():
+            words("%s: '%s'" % (rid, field), r.get(field), limit)
+        count("%s: 'when_it_applies'" % rid, r.get("when_it_applies"), MAX_CONDITIONS, "conditions")
+        for c in r.get("when_it_applies") or []:
+            words("%s: a condition in 'when_it_applies'" % rid, c, CONDITION_WORDS)
+        count("%s: the example" % rid, (r.get("example") or {}).get("steps"), MAX_EXAMPLE_STEPS, "steps")
+        count("%s: 'questions_for_sme'" % rid, r.get("questions_for_sme"), MAX_QUESTIONS, "questions")
+        for q in r.get("questions_for_sme") or []:
+            words("%s: a question" % rid, q, QUESTION_WORDS)
+    scenarios = [s for s in data.get("scenarios") or [] if isinstance(s, dict)]
+    count("'scenarios'", scenarios, MAX_SCENARIOS, "scenarios")
+    for sc in scenarios:
+        for field, limit in SCENARIO_WORD_LIMITS.items():
+            words("%s: '%s'" % (sc.get("id"), field), sc.get(field), limit)
+        count("%s: the example" % sc.get("id"), (sc.get("example") or {}).get("steps"), MAX_EXAMPLE_STEPS, "steps")
+    if not data.get("rules"):  # code with no business behaviour gets the short form
+        if len(data.get("flow_steps") or []) > 3 or len(scenarios) > 1:
+            errors.append("This file has no rules, so the code has no business behaviour. Use the short form: "
+                          "at most 3 flow steps (start, one step, end) and 1 scenario.")
+    return errors
+
+
 def check_requirements(data, work_id, rule_ids):
     """Checks the 'The system shall ...' statements and their links to the rules."""
     errors, seen, linked = [], set(), set()
@@ -472,8 +529,10 @@ def check_requirements(data, work_id, rule_ids):
         if qid in seen:
             errors.append("%s: requirement id is used twice." % qid)
         seen.add(qid)
-        if " shall " not in " %s " % q.get("text", ""):
-            errors.append("%s: 'text' must be a 'shall' statement, for example: The system shall ..." % qid)
+        shalls = len(re.findall(r"\bshall\b", str(q.get("text", ""))))
+        if shalls != 1:
+            errors.append("%s: 'text' must be one 'shall' statement (it has %d). One behaviour in one requirement; "
+                          "split it if it says two things." % (qid, shalls))
         if not q.get("rules"):
             errors.append("%s: 'rules' is empty. Link the requirement to the rules it rests on." % qid)
         for rid in q.get("rules") or []:
@@ -499,8 +558,6 @@ def check_surroundings(data):
                       "who uses the flow, write one entry with the role \"Not known from the code\".")
     if data.get("roles_basis") not in REASON_BASIS:
         errors.append("'roles_basis' must be stated, inferred or unknown.")
-    if data.get("roles_basis") == "unknown" and not data.get("flow_questions_for_sme"):
-        errors.append("The users and roles are unknown, so ask the SME in 'flow_questions_for_sme'.")
     return errors
 
 
@@ -794,14 +851,30 @@ def settled(verdict, state):
     return verdict.get("verdict") == "agree" or verdict.get("resolution") == "verifier_wrong"
 
 
+def slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")[:50] or "feature"
+
+
+def folded(summary, lines):
+    """Detail the reader opens when needed. It keeps the page short."""
+    return ["<details><summary>%s</summary>" % summary, ""] + lines + ["", "</details>", ""]
+
+
 def cmd_build_doc(module):
+    """Writes a short summary document and one page for each feature. Every id is a link."""
     rows = gather(module)
-    glossary, questions, fixed, body = {}, [], [], []
-    trace_flows, trace_reqs, trace_rules = [], [], []
-    titles, counts = {}, {"flows": 0, "scenarios": 0, "rules": 0, "requirements": 0}
+    glossary, questions, fixed, matrix, features, pending, roles_unknown = {}, [], [], [], [], [], []
+    counts = {"flows": 0, "scenarios": 0, "rules": 0, "requirements": 0}
+    main_name = module + "-business-logic.md"
+    feat_dir = out_dir(module, "features")
+    os.makedirs(feat_dir, exist_ok=True)
+    for old in os.listdir(feat_dir):
+        if old.endswith(".md"):
+            os.remove(os.path.join(feat_dir, old))
+
     for w, state, rules, verify in rows:
         if state in ("TODO", "EXTRACT_INVALID") or not rules:
-            body += ["### %s - not documented yet" % w["id"], ""]
+            pending.append(w["id"])
             continue
         for g in rules.get("glossary", []):
             glossary.setdefault(g["technical_name"], g["business_meaning"])
@@ -819,90 +892,107 @@ def cmd_build_doc(module):
         counts["requirements"] += len(reqs)
         counts["rules"] += len(the_rules)
         counts["scenarios"] += len(scenarios)
-        title = "3.%d %s" % (counts["flows"], rules["flow_title"])
-        titles[w["id"]] = title
-        own_questions = ["%s: %s" % (rules["flow_title"], q) for q in rules.get("flow_questions_for_sme") or []]
+        title = "2.%d %s" % (counts["flows"], rules["flow_title"])
+        fname = "%02d-%s.md" % (counts["flows"], slug(rules["flow_title"]))
+        here = lambda i: "[%s](#%s)" % (i, i)  # noqa: E731  link inside the feature page
+        far = lambda i: "[%s](features/%s#%s)" % (i, fname, i)  # noqa: E731  link from the summary
+        anchor = lambda i: '<a id="%s"></a>' % i  # noqa: E731
         mark = lambda verdict: "✔" if settled(verdict, state) else "☐"  # noqa: E731
+        all_verdicts = [verify.get("flow_verdict") or {}] + list(verdicts.values()) \
+            + list(sc_verdicts.values()) + list(fr_verdicts.values())
+        unchecked = sum(not settled(v, state) for v in all_verdicts)
+        if rules["roles_basis"] == "unknown":
+            roles_unknown.append(title)
+        own_questions = ["%s: %s" % (rules["flow_title"], q) for q in rules.get("flow_questions_for_sme") or []]
 
-        body += ["### " + title, ""]
+        uses = {}  # scenario id -> rules on its path
+        for sc in scenarios:
+            uses[sc["id"]] = []
+            for sid in sc["path"]:
+                uses[sc["id"]] += [r for r in steps[sid].get("rules") or [] if r not in uses[sc["id"]]]
+        needed_by = {r["id"]: [fr[q["id"]] for q in reqs if r["id"] in q["rules"]] for r in the_rules}
+        used_in = {r["id"]: [sc_no[s["id"]] for s in scenarios if r["id"] in uses[s["id"]]] for r in the_rules}
+
+        page = ["# " + title, "", "Part of [%s - business logic](../%s). Every id on this page is a link." % (module, main_name), ""]
         if w["kind"] == "unreached":
-            body += ["> Note: no other code in this module calls this code. Confirm if it is still used.", ""]
-        body += ["#### Overview", "", rules["flow_summary"], "", "**Why it exists:** " + rules["flow_purpose"], "",
+            page += ["> Note: no other code in this module calls this code. Confirm if it is still used.", ""]
+        page += ["## Overview", "", rules["flow_summary"], "", "**Why it exists:** " + rules["flow_purpose"], "",
                  "**Starts when:** " + rules["starts_when"], ""]
 
-        body += ["#### Users and roles", "", "| Role | Allowed to |", "|---|---|"]
-        body += ["| %s | %s |" % (cell(u["role"]), cell(u["allowed_to"])) for u in rules["users_and_roles"]]
-        body += ["", REASON_BASIS[rules["roles_basis"]].strip(), ""] if REASON_BASIS[rules["roles_basis"]] else [""]
-
-        body += ["#### Preconditions", ""] + ["- " + str(p) for p in rules["preconditions"]] + [""]
-
-        body += ["#### Functional requirements", ""]
-        for q in reqs:
-            body.append("- **%s:** %s (%s) Second check %s" % (
-                fr[q["id"]], q["text"], ", ".join(br[r] for r in q["rules"]), mark(fr_verdicts.get(q["id"], {}))))
-            trace_reqs.append((fr[q["id"]], q["id"], ", ".join(br[r] for r in q["rules"])))
-        body += [""] if reqs else ["None. This code has no business behaviour.", ""]
-
-        body += ["#### Business rules", ""]
-        for r in the_rules:
-            body += ["##### %s - %s" % (br[r["id"]], r["title"]), "",
-                     "**What it does:** " + r["what_it_does"], "",
-                     "**Business reason:** " + r["business_reason"] + REASON_BASIS[r["reason_basis"]], "",
-                     "**When it applies:**"]
-            body += ["- " + c for c in r["when_it_applies"]]
-            body += ["", "**How the value is calculated:** " + r["how_it_is_calculated"], "",
-                     "**Values and where they come from:**", "", "| Value | Comes from | Exact value, column or formula |",
-                     "|---|---|---|"]
-            for v in r["values_used"]:
-                body.append("| %s | %s | %s |" % (cell(v["name"]), VALUE_SOURCES[v["comes_from"]], cell(v["value"])))
-                if v["comes_from"] == "fixed":
-                    fixed.append((v["name"], v["value"], br[r["id"]]))
-            body += ["", "**Example:**"] + example_lines(r["example"])
-            if r.get("exceptions"):
-                body += ["", "**Exceptions:**"] + ["- " + e for e in r["exceptions"]]
-            body += ["", "**Status:** Code-checked ✔ / Second check %s / SME confirmed ☐%s"
-                     % (mark(verdicts.get(r["id"], {})),
-                        "  — **UNCLEAR, see open questions**" if r["status"] == "unclear" else ""), ""]
-            own_questions += ["%s: %s" % (br[r["id"]], q) for q in r.get("questions_for_sme") or []]
-            trace_rules.append((br[r["id"]], r["id"], "; ".join(
-                "`%s` lines %s-%s" % (s["file"], s["start_line"], s["end_line"]) for s in r["sources"])))
         if not the_rules:
-            body += ["None.", ""]
-
-        def scenario_block(sc):
-            used = []
-            for sid in sc["path"]:
-                used += [br[r] for r in steps[sid].get("rules") or [] if br[r] not in used]
-            lines = ["**%s - %s**" % (sc_no[sc["id"]], sc["title"]), "", "When:"] + ["- " + c for c in sc["when"]]
-            lines += ["", "Steps:"] + ["%d. %s" % (n, steps[sid]["text"]) for n, sid in enumerate(sc["path"], 1)]
-            lines += ["", "Outcome: " + sc["outcome"]]
-            if sc["type"] != "main":
-                lines += ["", "What the user sees: " + sc["user_sees"]]
-            lines += ["", "Example:"] + example_lines(sc["example"])
-            return lines + ["", "Rules used: %s. Second check %s" % (", ".join(used) or "none",
-                                                                     mark(sc_verdicts.get(sc["id"], {}))), ""]
-
-        body += ["#### Main flow", ""] + flow_diagram(rules["flow_steps"])
-        body += ["Second check of the diagram: %s" % mark(verify.get("flow_verdict") or {}), ""]
-        for sc in scenarios:
-            if sc["type"] == "main":
-                body += scenario_block(sc)
-
-        others = [sc for sc in scenarios if sc["type"] != "main"]
-        body += ["#### Alternate and exception flows", ""]
-        if others:
-            body += ["| Scenario | Type | When | Outcome | What the user sees |", "|---|---|---|---|---|"]
-            body += ["| %s %s | %s | %s | %s | %s |" % (sc_no[sc["id"]], cell(sc["title"]), sc["type"].capitalize(),
-                                                      cell("; ".join(sc["when"])), cell(sc["outcome"]), cell(sc["user_sees"]))
-                     for sc in others] + [""]
-            for sc in others:
-                body += scenario_block(sc)
+            page += ["## Business behaviour", "", "None. This code changes no business result.", ""]
+            page += ["- " + str(e.get("reason", "")) for e in rules.get("no_business_rule", [])] + [""]
         else:
-            body += ["None.", ""]
+            page += ["## Users and roles", "", "| Role | Allowed to |", "|---|---|"]
+            page += ["| %s | %s |" % (cell(u["role"]), cell(u["allowed_to"])) for u in rules["users_and_roles"]]
+            page += ["", REASON_BASIS[rules["roles_basis"]].strip(), ""] if REASON_BASIS[rules["roles_basis"]] else [""]
+            page += ["## Preconditions", ""] + ["- " + str(p) for p in rules["preconditions"]] + [""]
 
-        body += ["#### Inputs and outputs", "", "**Inputs:**"] + ["- " + str(i) for i in rules["inputs"]]
-        body += ["", "**Outputs:**"] + ["- " + str(o) for o in rules["outputs"]]
-        body += ["", "**How it can end:**"] + ["- " + s["text"] for s in rules["flow_steps"] if s["kind"] == "end"] + [""]
+            page += ["## Functional requirements", ""]
+            for q in reqs:
+                page.append("- %s**%s:** %s (%s) Second check %s" % (
+                    anchor(fr[q["id"]]), fr[q["id"]], q["text"], ", ".join(here(br[r]) for r in q["rules"]),
+                    mark(fr_verdicts.get(q["id"], {}))))
+            page.append("")
+
+            page += ["## Business rules", ""]
+            for r in the_rules:
+                rid = br[r["id"]]
+                page += ["### %s%s - %s" % (anchor(rid), rid, r["title"]), "",
+                         "**What it does:** " + r["what_it_does"], "", "**When it applies:**"]
+                page += ["- " + c for c in r["when_it_applies"]]
+                page += ["", "**How the value is calculated:** " + r["how_it_is_calculated"], "", "**Example:**"]
+                page += example_lines(r["example"])
+                if r.get("exceptions"):
+                    page += ["", "**Exceptions:**"] + ["- " + e for e in r["exceptions"]]
+                page += ["", "Needed by: %s. Used in: %s. Code: [appendix A](../%s#trace-%s). "
+                             "Code-checked ✔ / Second check %s / SME confirmed ☐%s"
+                         % (", ".join(here(i) for i in needed_by[r["id"]]),
+                            ", ".join(here(i) for i in used_in[r["id"]]) or "no scenario", main_name, rid,
+                            mark(verdicts.get(r["id"], {})),
+                            "  — **UNCLEAR, see open questions**" if r["status"] == "unclear" else ""), ""]
+                detail = ["**Business reason:** " + r["business_reason"] + REASON_BASIS[r["reason_basis"]], "",
+                          "| Value | Comes from | Exact value, column or formula |", "|---|---|---|"]
+                for v in r["values_used"]:
+                    detail.append("| %s | %s | %s |" % (cell(v["name"]), VALUE_SOURCES[v["comes_from"]], cell(v["value"])))
+                    if v["comes_from"] == "fixed":
+                        fixed.append((v["name"], v["value"], far(rid)))
+                page += folded("Business reason and the origin of each value", detail)
+                own_questions += ["%s: %s" % (rid, q) for q in r.get("questions_for_sme") or []]
+                matrix.append((rid, far(rid), ", ".join(far(i) for i in needed_by[r["id"]]),
+                               ", ".join(far(i) for i in used_in[r["id"]]) or "-",
+                               "; ".join("`%s` lines %s-%s" % (s["file"], s["start_line"], s["end_line"])
+                                         for s in r["sources"])))
+
+            def scenario_lines(sc):
+                lines = ["When:"] + ["- " + c for c in sc["when"]]
+                lines += ["", "Steps:"] + ["%d. %s" % (n, steps[sid]["text"]) for n, sid in enumerate(sc["path"], 1)]
+                lines += ["", "Outcome: " + sc["outcome"], "", "Example:"] + example_lines(sc["example"])
+                return lines + ["", "Rules used: %s. Second check %s" % (
+                    ", ".join(here(br[r]) for r in uses[sc["id"]]) or "none", mark(sc_verdicts.get(sc["id"], {}))), ""]
+
+            page += ["## Main flow", ""] + flow_diagram(rules["flow_steps"])
+            page += ["Second check of the diagram: %s" % mark(verify.get("flow_verdict") or {}), ""]
+            for sc in scenarios:
+                if sc["type"] == "main":
+                    page += ["%s**%s - %s**" % (anchor(sc_no[sc["id"]]), sc_no[sc["id"]], sc["title"]), ""] + scenario_lines(sc)
+
+            others = [sc for sc in scenarios if sc["type"] != "main"]
+            page += ["## Alternate and exception flows", ""]
+            if others:
+                page += ["| Scenario | Type | When | Outcome | What the user sees | Rules |", "|---|---|---|---|---|---|"]
+                page += ["| %s%s %s | %s | %s | %s | %s | %s |" % (
+                    anchor(sc_no[sc["id"]]), sc_no[sc["id"]], cell(sc["title"]), sc["type"].capitalize(),
+                    cell("; ".join(sc["when"])), cell(sc["outcome"]), cell(sc["user_sees"]),
+                    ", ".join(here(br[r]) for r in uses[sc["id"]]) or "-") for sc in others] + [""]
+                for sc in others:
+                    page += folded("%s - steps and worked example" % sc_no[sc["id"]], scenario_lines(sc))
+            else:
+                page += ["None.", ""]
+
+            page += ["## Inputs and outputs", "", "**Inputs:**"] + ["- " + str(i) for i in rules["inputs"]]
+            page += ["", "**Outputs:**"] + ["- " + str(o) for o in rules["outputs"]]
+            page += ["", "**How it can end:**"] + ["- " + s["text"] for s in rules["flow_steps"] if s["kind"] == "end"] + [""]
 
         still_open = [(rules["flow_title"], verify.get("flow_verdict") or {})]
         for key, names, entries in (("rule_id", br, verify.get("verdicts", [])),
@@ -913,51 +1003,74 @@ def cmd_build_doc(module):
                        for m in verify.get("missed_rules", [])]
         own_questions += ["%s: the two reviews still disagree after a correction. %s" % (name, v.get("recheck_reason", ""))
                           for name, v in still_open if v.get("recheck") == "disagree"]
-        body += ["#### Open questions", ""] + (["- " + q for q in own_questions] or ["None."]) + [""]
+        page += ["## Open questions", ""] + (["- " + q for q in own_questions] or ["None."]) + [""]
         questions += own_questions
-        trace_flows.append((title, w["id"], "; ".join(
-            "`%s` (`%s` lines %s-%s)" % (e["method"], e["file"], e["start_line"], e["end_line"]) for e in w["entry_points"])))
+        open(os.path.join(feat_dir, fname), "w", encoding="utf-8").write("\n".join(page))
+        features.append({
+            "id": w["id"], "title": title, "file": fname, "rules": rules, "kind": w["kind"],
+            "numbers": (len(reqs), len(the_rules), len(scenarios), len(own_questions), unchecked),
+            "requirements": ["- **%s:** %s (%s)" % (far(fr[q["id"]]), q["text"], ", ".join(far(br[r]) for r in q["rules"]))
+                             for q in reqs],
+            "entry": "; ".join("`%s` (`%s` lines %s-%s)" % (e["method"], e["file"], e["start_line"], e["end_line"])
+                               for e in w["entry_points"]),
+        })
 
     overview = read_json(out_dir(module, "overview.json")) if overview_state(module)[0] == "DONE" else None
     for q in reversed((overview or {}).get("questions_for_sme") or []):
         questions.insert(0, "%s module: %s" % (module, q))
+    if roles_unknown:  # asked once for the module, not once in every feature
+        questions.insert(0, "Users and roles: the code does not show who uses these features or what each role is "
+                            "allowed to do. Please say it for: %s." % "; ".join(roles_unknown))
+    seen, unique = set(), []
+    for q in questions:
+        key = re.sub(r"\W+", " ", q.split(":", 1)[-1]).strip().lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(q)
     types = (overview or {}).get("flow_types", [])
+    by_id = {f["id"]: f for f in features}
+    linked = lambda f: "[%s](features/%s)" % (f["title"], f["file"])  # noqa: E731
 
     out = ["# %s - Business logic of the current system" % module, "",
            "This document describes what the current system does. It was produced from the source code.", "",
-           "How to read it: chapter 1 says why the module exists. Chapter 3 has one section for each feature, "
-           "always in the same order: overview, users and roles, preconditions, functional requirements, "
-           "business rules, main flow, alternate and exception flows, inputs and outputs, open questions. "
-           "References to the code are kept out of the text; they are in appendix A.", "",
-           "Ids: **FR** = functional requirement, **BR** = business rule, **SC** = scenario.", "",
+           "How to read it: this page is the summary. Chapter 2 lists each feature with its functional "
+           "requirements. The title of a feature is a link to its own page, with the business rules, the flow "
+           "diagram, the scenarios and the worked examples. Every id (**FR** = functional requirement, "
+           "**BR** = business rule, **SC** = scenario) is a link. Appendix A links every requirement to its "
+           "rule and to the lines of code.", "",
            "Status marks: **Code-checked** = passed the automatic checks. "
            "**Second check** = a second, independent review agreed. "
            "**SME confirmed** = to be ticked by the business expert.", "",
-           "## 1. Module overview", "", "### Why this module exists", ""]
+           "## 1. Module overview", ""]
     if overview:
         out += [overview["module_purpose"] + (REASON_BASIS["inferred"] if overview["purpose_basis"] == "inferred" else ""), ""]
     else:
-        out += ["Not written yet. It is written when all flows are documented.", ""]
-    out += ["### At a glance", "", "| | Number |", "|---|---|"]
-    if overview:
-        out.append("| Types of feature | %d |" % len(types))
+        out += ["Not written yet. It is written when all features are documented.", ""]
+    out += ["| | Number |", "|---|---|"]
     out += ["| Features | %d |" % counts["flows"],
             "| Functional requirements | %d |" % counts["requirements"],
             "| Business rules | %d |" % counts["rules"],
             "| Scenarios (ways through a feature, from start to end) | %d |" % counts["scenarios"],
-            "| Open questions for the SME | %d |" % len(questions), ""]
+            "| Open questions for the SME | %d |" % len(unique), ""]
     if overview:
-        out += ["### Types of feature", "", "```mermaid", "flowchart LR", '    M(["%s module"])' % mermaid_text(module)]
-        out += ['    M --> T%d["%s<br/>%d feature%s"]' % (n, mermaid_text(t["name"]), len(t["flows"]), "s" * (len(t["flows"]) != 1))
-                for n, t in enumerate(types, 1)]
-        out += ["```", ""]
         for n, t in enumerate(types, 1):
             out += ["**%d. %s** - %s" % (n, t["name"], t["description"]), ""]
-            out += ["- %s" % titles.get(f, f) for f in t["flows"]] + [""]
+            out += ["- " + (linked(by_id[f]) if f in by_id else f) for f in t["flows"]] + [""]
+
+    out += ["## 2. Features", "",
+            "| Feature | Requirements | Rules | Scenarios | Open questions | Not yet second-checked |", "|---|---|---|---|---|---|"]
+    out += ["| %s | %d | %d | %d | %d | %d |" % ((linked(f),) + f["numbers"]) for f in features]
+    out += ["| %s - not documented yet | | | | | |" % i for i in pending] + [""]
+    for f in features:
+        out += ["### " + linked(f), "", f["rules"]["flow_summary"], ""]
+        if f["kind"] == "unreached":
+            out += ["> Note: no other code in this module calls this code. Confirm if it is still used.", ""]
+        out += f["requirements"] or ["No business behaviour."]
+        out.append("")
+
     if glossary:
-        out += ["## 2. Glossary: names in the code and their business meaning", "", "| Name in code | Business meaning |", "|---|---|"]
+        out += ["## 3. Glossary: names in the code and their business meaning", "", "| Name in code | Business meaning |", "|---|---|"]
         out += ["| `%s` | %s |" % (k, cell(glossary[k])) for k in sorted(glossary)] + [""]
-    out += ["## 3. Features", ""] + body
     out += ["## 4. Fixed business values", "",
             "Values that are written in the code itself. To change one of them today, the code must be changed.", ""]
     if fixed:
@@ -965,17 +1078,15 @@ def cmd_build_doc(module):
         out += ["| %s | %s | %s |" % (cell(n), cell(v), rid) for n, v, rid in fixed] + [""]
     else:
         out += ["None.", ""]
-    out += ["## 5. All open questions for the SME", ""] + (["- " + q for q in questions] or ["None."]) + [""]
-    out += ["## Appendix A. Where each feature, requirement and rule comes from in the code", "",
-            "| Feature | Work item | Entry point in the code |", "|---|---|---|"]
-    out += ["| %s | %s | %s |" % (cell(t), i, e) for t, i, e in trace_flows]
-    out += ["", "| Requirement | Id in the data files | Rests on |", "|---|---|---|"]
-    out += ["| %s | %s | %s |" % row for row in trace_reqs]
-    out += ["", "| Rule | Id in the data files | File and lines |", "|---|---|---|"]
-    out += ["| %s | %s | %s |" % row for row in trace_rules] + [""]
-    path = out_dir(module, module + "-business-logic.md")
+    out += ["## 5. Open questions for the SME", ""] + (["- " + q for q in unique] or ["None."]) + [""]
+    out += ["## Appendix A. From each requirement to its rule, its scenarios and the code", "",
+            "| Rule | Needed by | Used in scenarios | Code lines |", "|---|---|---|---|"]
+    out += ['| <a id="trace-%s"></a>%s | %s | %s | %s |' % row for row in matrix]
+    out += ["", "| Feature | Work item | Entry point in the code |", "|---|---|---|"]
+    out += ["| %s | %s | %s |" % (linked(f), f["id"], f["entry"]) for f in features] + [""]
+    path = out_dir(module, main_name)
     open(path, "w", encoding="utf-8").write("\n".join(out))
-    print("Written: " + plain(path))
+    print("Written: %s and %d feature pages in %s" % (plain(path), len(features), plain(feat_dir)))
 
 
 # ---------------------------------------------------------------- run (no human in the loop)

@@ -2,13 +2,4 @@
 __pycache__/
 *.pyc
 
-# Code Explainer: run-time files (rebuilt on every run)
-.github/output/*/logs/
-.github/output/*/attempts.json
-.github/output/*/source-hashes.json
-.github/output/*/flows-index.json
-.github/output/*/run-console.txt
-.github/output/*/runs/
 
-# Results of runs (rebuilt by the tool)
-.github/output/

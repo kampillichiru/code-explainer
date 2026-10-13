@@ -1,0 +1,146 @@
+[
+  {
+    "step": "extract",
+    "model": "sonnet",
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "started_utc": "2026-10-13T14:39:56Z",
+    "seconds": 2798.5,
+    "exit_code": null,
+    "source_files_changed": [],
+    "prompt_sha256": "d13608f77f8484b33e2b1ed77db4245933185d17dcae492e2684f160451b68d4",
+    "source_sha256": {
+      "sample/db/ar_writeoff.sql": "04f6dc1963104072dd9bf74f9a7094d0392bc2c7a6bee37c77fdbb68fc588f97"
+    },
+    "state_before": "TODO",
+    "state_after": "EXTRACTED"
+  },
+  {
+    "step": "verify",
+    "model": "opus",
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "started_utc": "2026-10-13T15:26:34Z",
+    "seconds": 4.2,
+    "exit_code": 1,
+    "source_files_changed": [],
+    "prompt_sha256": "fb067f216f700930de986878c09af8bbeed024074ac035ef56ffdbee152fa9ee",
+    "source_sha256": {
+      "sample/db/ar_writeoff.sql": "04f6dc1963104072dd9bf74f9a7094d0392bc2c7a6bee37c77fdbb68fc588f97"
+    },
+    "state_before": "EXTRACTED",
+    "state_after": "EXTRACTED"
+  },
+  {
+    "step": "verify",
+    "model": "opus",
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "started_utc": "2026-10-13T15:26:39Z",
+    "seconds": 4.3,
+    "exit_code": 1,
+    "source_files_changed": [],
+    "prompt_sha256": "fb067f216f700930de986878c09af8bbeed024074ac035ef56ffdbee152fa9ee",
+    "source_sha256": {
+      "sample/db/ar_writeoff.sql": "04f6dc1963104072dd9bf74f9a7094d0392bc2c7a6bee37c77fdbb68fc588f97"
+    },
+    "state_before": "EXTRACTED",
+    "state_after": "EXTRACTED"
+  },
+  {
+    "step": "verify",
+    "model": "opus",
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "started_utc": "2026-10-13T15:26:43Z",
+    "seconds": 4.1,
+    "exit_code": 1,
+    "source_files_changed": [],
+    "prompt_sha256": "fb067f216f700930de986878c09af8bbeed024074ac035ef56ffdbee152fa9ee",
+    "source_sha256": {
+      "sample/db/ar_writeoff.sql": "04f6dc1963104072dd9bf74f9a7094d0392bc2c7a6bee37c77fdbb68fc588f97"
+    },
+    "state_before": "EXTRACTED",
+    "state_after": "EXTRACTED"
+  },
+  {
+    "step": "verify",
+    "model": "opus",
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "started_utc": "2026-10-13T15:26:47Z",
+    "seconds": 4.4,
+    "exit_code": 1,
+    "source_files_changed": [],
+    "prompt_sha256": "fb067f216f700930de986878c09af8bbeed024074ac035ef56ffdbee152fa9ee",
+    "source_sha256": {
+      "sample/db/ar_writeoff.sql": "04f6dc1963104072dd9bf74f9a7094d0392bc2c7a6bee37c77fdbb68fc588f97"
+    },
+    "state_before": "EXTRACTED",
+    "state_after": "EXTRACTED"
+  },
+  {
+    "step": "verify",
+    "model": "opus",
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "started_utc": "2026-10-13T15:26:52Z",
+    "seconds": 4.3,
+    "exit_code": 1,
+    "source_files_changed": [],
+    "prompt_sha256": "fb067f216f700930de986878c09af8bbeed024074ac035ef56ffdbee152fa9ee",
+    "source_sha256": {
+      "sample/db/ar_writeoff.sql": "04f6dc1963104072dd9bf74f9a7094d0392bc2c7a6bee37c77fdbb68fc588f97"
+    },
+    "state_before": "EXTRACTED",
+    "state_after": "EXTRACTED"
+  }
+]

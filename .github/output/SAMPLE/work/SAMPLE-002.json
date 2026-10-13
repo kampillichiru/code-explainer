@@ -1,0 +1,35 @@
+{
+  "id": "SAMPLE-002",
+  "module": "SAMPLE",
+  "kind": "unreached",
+  "source_root": "E:/Chiru/AIStuff/code-explainer/.github",
+  "entry_points": [
+    {
+      "method": "InvProc.oldPost",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "start_line": 37,
+      "end_line": 41
+    }
+  ],
+  "methods_to_document": [
+    {
+      "method": "InvProc.oldPost",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "start_line": 37,
+      "end_line": 41
+    }
+  ],
+  "context_methods": [],
+  "calls_to_other_modules": [],
+  "items_to_cover": [
+    {
+      "id": "sample/src/com/acme/ar/InvProc.java:38:if",
+      "kind": "if",
+      "file": "sample/src/com/acme/ar/InvProc.java",
+      "line": 38,
+      "text": "if (amt.signum() < 0) {"
+    }
+  ],
+  "rules_file": "output/SAMPLE/rules/SAMPLE-002.json",
+  "verify_file": "output/SAMPLE/verify/SAMPLE-002.json"
+}

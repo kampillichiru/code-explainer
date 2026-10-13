@@ -1,0 +1,4 @@
+exit code 1
+
+You've hit your session limit · resets 12am (Asia/Kolkata)
+

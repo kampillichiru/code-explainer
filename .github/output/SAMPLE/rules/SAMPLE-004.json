@@ -1,0 +1,226 @@
+{
+  "work_item": "SAMPLE-004",
+  "flow_title": "Write off small balances and deactivate dormant customers",
+  "flow_summary": "A nightly run writes off small, long-overdue open invoices, but stops and undoes everything if more than 1,000 would be written off. A separate script marks customers inactive when they have had no invoice for 36 months.",
+  "flow_purpose": "Clean up balances too small to chase and customers who no longer trade. The business team states small old balances are written off; the reason for deactivating customers is not known from the code.",
+  "starts_when": "The nightly write-off procedure is run with a run date; the customer script is run on its own, with no trigger shown in the code.",
+  "inputs": ["Run date", "Open invoices (status, balance, due date)", "Customers (status, last invoice date)", "Today's system date"],
+  "outputs": ["Invoices marked written off, with the write-off date", "Customers marked inactive", "Error 'too many write-offs' when the cap is exceeded"],
+  "users_and_roles": [{"role": "Not known from the code", "allowed_to": "Not known from the code"}],
+  "roles_basis": "unknown",
+  "preconditions": ["The run date is supplied to the write-off procedure.", "Invoices and customers exist in the accounts receivable tables."],
+  "flow_questions_for_sme": [
+    "Who or what starts the nightly write-off and the customer script, and at what time?",
+    "Is the customer script meant to be part of the nightly run, and is its result saved afterwards?"
+  ],
+  "flow_steps": [
+    {"id": "S1", "kind": "start", "text": "Nightly write-off starts with a run date", "next": "S2"},
+    {"id": "S2", "kind": "step", "text": "Write off small open invoices overdue over 90 days", "rules": ["SAMPLE-004-R1"], "next": "S3"},
+    {"id": "S3", "kind": "decision", "text": "Did the update finish without error?", "rules": ["SAMPLE-004-R3"],
+     "branches": [{"label": "Yes", "to": "S4"}, {"label": "No", "to": "E3"}]},
+    {"id": "S4", "kind": "decision", "text": "More than 1,000 invoices written off?", "rules": ["SAMPLE-004-R2"],
+     "branches": [{"label": "Yes", "to": "E1"}, {"label": "No", "to": "S5"}]},
+    {"id": "S5", "kind": "step", "text": "Save the write-offs", "rules": ["SAMPLE-004-R1"], "next": "E2"},
+    {"id": "E1", "kind": "end", "text": "Rejected: write-offs undone, error raised"},
+    {"id": "E2", "kind": "end", "text": "Small balances are written off"},
+    {"id": "E3", "kind": "end", "text": "Failed: changes undone, error passed on"},
+    {"id": "S6", "kind": "start", "text": "Customer clean-up script runs", "next": "S7"},
+    {"id": "S7", "kind": "step", "text": "Mark active customers with no invoice for 36 months inactive", "rules": ["SAMPLE-004-R4"], "next": "E4"},
+    {"id": "E4", "kind": "end", "text": "Dormant customers are marked inactive"}
+  ],
+  "scenarios": [
+    {
+      "id": "SAMPLE-004-SC1",
+      "title": "Small old balances written off",
+      "type": "main",
+      "when": ["Open invoices with a balance up to 2.50 are more than 90 days overdue.", "1,000 or fewer invoices qualify."],
+      "path": ["S1", "S2", "S3", "S4", "S5", "E2"],
+      "outcome": "Qualifying invoices are marked written off with the run date and the change is saved.",
+      "example": {
+        "inputs": {"Run date": "2026-10-13", "Invoice A": "open, balance 1.80, due 2026-07-01", "Invoice B": "open, balance 2.51, due 2026-07-01"},
+        "steps": ["Cut-off due date = 2026-10-13 minus 90 days = 2026-07-15", "A: 1.80 is above 0 and at most 2.50; due 2026-07-01 is before 2026-07-15, so A qualifies", "B: 2.51 is above 2.50, so B is left open", "Count written off = 1, not above 1,000, so changes are saved"],
+        "result": "Invoice A: status W, write-off date 2026-10-13. Invoice B unchanged."
+      }
+    },
+    {
+      "id": "SAMPLE-004-SC2",
+      "title": "Too many write-offs, run rejected",
+      "type": "exception",
+      "when": ["More than 1,000 invoices qualify for write-off."],
+      "path": ["S1", "S2", "S3", "S4", "E1"],
+      "outcome": "All write-offs from this run are undone and the run stops with an error.",
+      "user_sees": "Error -20001 with the text 'too many write-offs'.",
+      "example": {
+        "inputs": {"Run date": "2026-10-13", "Qualifying invoices": "1,001"},
+        "steps": ["1,001 invoices are updated", "1,001 is more than 1,000", "Changes are undone and the error is raised"],
+        "result": "No invoice is written off; error 'too many write-offs'."
+      }
+    },
+    {
+      "id": "SAMPLE-004-SC3",
+      "title": "Database error during write-off",
+      "type": "exception",
+      "when": ["Any error occurs while the write-off runs."],
+      "path": ["S1", "S2", "S3", "E3"],
+      "outcome": "Changes are undone and the original error is passed to the caller.",
+      "user_sees": "The original database error; its text is not known from the code.",
+      "example": {
+        "inputs": {"Run date": "2026-10-13", "Event": "Database error while updating"},
+        "steps": ["Update fails", "Changes are undone", "The same error is raised again"],
+        "result": "No invoice is written off; the caller receives the error."
+      }
+    },
+    {
+      "id": "SAMPLE-004-SC4",
+      "title": "Dormant customer marked inactive",
+      "type": "alternate",
+      "when": ["The customer is active.", "The last invoice is more than 36 months before today."],
+      "path": ["S6", "S7", "E4"],
+      "outcome": "The customer's status is changed from active to inactive.",
+      "user_sees": "Not known from the code",
+      "example": {
+        "inputs": {"Today": "2026-10-13", "Customer status": "A", "Last invoice date": "2023-06-30"},
+        "steps": ["Cut-off = 2026-10-13 minus 36 months = 2023-10-13", "2023-06-30 is before 2023-10-13", "Customer is active, so it qualifies"],
+        "result": "Customer status = I"
+      }
+    }
+  ],
+  "requirements": [
+    {"id": "SAMPLE-004-FR1",
+     "text": "The system shall write off an open invoice when its balance is above 0 and at most 2.50 and its due date is more than 90 days before the run date.",
+     "rules": ["SAMPLE-004-R1"]},
+    {"id": "SAMPLE-004-FR2",
+     "text": "The system shall mark a written-off invoice with status W and the run date as its write-off date.",
+     "rules": ["SAMPLE-004-R1"]},
+    {"id": "SAMPLE-004-FR3",
+     "text": "The system shall undo all write-offs of a run and raise the error 'too many write-offs' when more than 1,000 invoices would be written off.",
+     "rules": ["SAMPLE-004-R2"]},
+    {"id": "SAMPLE-004-FR4",
+     "text": "The system shall undo all write-offs of a run and pass the error on to the caller when any error occurs during the write-off.",
+     "rules": ["SAMPLE-004-R3"]},
+    {"id": "SAMPLE-004-FR5",
+     "text": "The system shall mark an active customer as inactive when the customer's last invoice date is more than 36 months before today.",
+     "rules": ["SAMPLE-004-R4"]}
+  ],
+  "rules": [
+    {
+      "id": "SAMPLE-004-R1",
+      "title": "Write off small old open invoices",
+      "what_it_does": "Marks open invoices as written off when the balance is small and the invoice is more than 90 days past its due date, then saves the change.",
+      "business_reason": "Small old balances are cleaned up because they are not worth collecting. Stated by the code comment 'Nightly clean-up of small balances' and the business team notes.",
+      "reason_basis": "stated",
+      "when_it_applies": ["The invoice status is O (open).", "The balance is above 0.", "The balance is at most 2.50.", "The due date is before the run date minus 90 days."],
+      "how_it_is_calculated": "No calculation. Cut-off due date = run date - 90 days. Status becomes W and write-off date becomes the run date.",
+      "values_used": [
+        {"name": "Run date", "value": "Date given to the procedure", "comes_from": "input"},
+        {"name": "Write-off limit", "value": "2.50", "comes_from": "fixed"},
+        {"name": "Days overdue before write-off", "value": "90", "comes_from": "fixed"},
+        {"name": "Open status", "value": "AR_INVOICE.STS = 'O'", "comes_from": "database"},
+        {"name": "Invoice balance", "value": "AR_INVOICE.BAL_AMT", "comes_from": "database"},
+        {"name": "Due date", "value": "AR_INVOICE.DUE_DT", "comes_from": "database"},
+        {"name": "Written-off status", "value": "'W' stored in AR_INVOICE.STS", "comes_from": "fixed"},
+        {"name": "Write-off date", "value": "AR_INVOICE.WRITEOFF_DT = run date", "comes_from": "calculated"}
+      ],
+      "example": {
+        "inputs": {"Run date": "2026-10-13", "Balance": "1.80", "Due date": "2026-07-01", "Status": "O"},
+        "steps": ["Cut-off = 2026-10-13 minus 90 days = 2026-07-15", "1.80 is above 0 and at most 2.50", "2026-07-01 is before 2026-07-15"],
+        "result": "Status W, write-off date 2026-10-13"
+      },
+      "exceptions": ["An invoice due exactly on the cut-off date is not written off.", "A balance of exactly 2.50 is written off."],
+      "sources": [{"file": "sample/db/ar_writeoff.sql", "start_line": 2, "end_line": 10}],
+      "covers": ["sample/db/ar_writeoff.sql:2:sql", "sample/db/ar_writeoff.sql:5:sql"],
+      "status": "unclear",
+      "questions_for_sme": [
+        "What currency is the 2.50 limit in, and is it right for every customer and region?",
+        "Should the 90 days count from the due date as the code does, or from the invoice date?"
+      ]
+    },
+    {
+      "id": "SAMPLE-004-R2",
+      "title": "Cap of 1,000 write-offs per run",
+      "what_it_does": "If more than 1,000 invoices were written off in one run, undoes them all and stops with the error 'too many write-offs'. Otherwise saves.",
+      "business_reason": "Not known from the code. It may protect against a wrong mass write-off.",
+      "reason_basis": "unknown",
+      "when_it_applies": ["More than 1,000 invoices were updated by the write-off."],
+      "how_it_is_calculated": "No calculation. The count of updated invoices is compared with 1,000.",
+      "values_used": [
+        {"name": "Invoices written off in this run", "value": "Number of rows updated by the write-off", "comes_from": "calculated"},
+        {"name": "Maximum write-offs per run", "value": "1000", "comes_from": "fixed"},
+        {"name": "Error number", "value": "-20001", "comes_from": "fixed"},
+        {"name": "Error text", "value": "too many write-offs", "comes_from": "fixed"}
+      ],
+      "example": {
+        "inputs": {"Invoices qualifying": "1,001"},
+        "steps": ["1,001 is more than 1,000", "All 1,001 write-offs are undone", "Error 'too many write-offs' is raised"],
+        "result": "No invoice written off"
+      },
+      "exceptions": ["Exactly 1,000 write-offs is allowed and saved."],
+      "sources": [{"file": "sample/db/ar_writeoff.sql", "start_line": 12, "end_line": 16}],
+      "covers": ["sample/db/ar_writeoff.sql:12:if"],
+      "status": "unclear",
+      "questions_for_sme": [
+        "Why is the cap 1,000, and what should happen when it is exceeded: who is told and how are the invoices handled afterwards?"
+      ]
+    },
+    {
+      "id": "SAMPLE-004-R3",
+      "title": "Any error undoes the write-offs",
+      "what_it_does": "If any error happens during the write-off, undoes all changes of the run and passes the same error to the caller.",
+      "business_reason": "Not known from the code. It keeps invoices from being left partly written off.",
+      "reason_basis": "inferred",
+      "when_it_applies": ["Any error occurs while the write-off procedure runs."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Error", "value": "The error raised by the database or by the cap rule", "comes_from": "system"}
+      ],
+      "example": {
+        "inputs": {"Event": "Database error during the update"},
+        "steps": ["Changes are undone", "The same error is raised to the caller"],
+        "result": "No invoice written off; caller receives the error"
+      },
+      "exceptions": [],
+      "sources": [{"file": "sample/db/ar_writeoff.sql", "start_line": 17, "end_line": 20}],
+      "covers": ["sample/db/ar_writeoff.sql:17:catch", "sample/db/ar_writeoff.sql:18:catch"],
+      "status": "clear",
+      "questions_for_sme": []
+    },
+    {
+      "id": "SAMPLE-004-R4",
+      "title": "Deactivate customers with no invoice for 36 months",
+      "what_it_does": "Changes the status of active customers to inactive when their last invoice is more than 36 months before today's date.",
+      "business_reason": "Not known from the code. The business team notes do not mention this behaviour.",
+      "reason_basis": "unknown",
+      "when_it_applies": ["The customer status is A (active).", "The last invoice date is before today minus 36 months."],
+      "how_it_is_calculated": "Cut-off date = today's system date minus 36 months. Status A becomes I.",
+      "values_used": [
+        {"name": "Today's date", "value": "System date", "comes_from": "system"},
+        {"name": "Months without invoice", "value": "36", "comes_from": "fixed"},
+        {"name": "Customer status", "value": "CUST_MASTER.STS", "comes_from": "database"},
+        {"name": "Last invoice date", "value": "CUST_MASTER.LAST_INV_DT", "comes_from": "database"},
+        {"name": "Active / inactive codes", "value": "'A' / 'I'", "comes_from": "fixed"}
+      ],
+      "example": {
+        "inputs": {"Today": "2026-10-13", "Status": "A", "Last invoice date": "2023-06-30"},
+        "steps": ["Cut-off = 2026-10-13 minus 36 months = 2023-10-13", "2023-06-30 is before 2023-10-13"],
+        "result": "Status changes from A to I"
+      },
+      "exceptions": ["A customer with no last invoice date is never deactivated.", "Customers already inactive are not changed."],
+      "sources": [{"file": "sample/db/ar_writeoff.sql", "start_line": 24, "end_line": 24}],
+      "covers": ["sample/db/ar_writeoff.sql:24:sql"],
+      "status": "unclear",
+      "questions_for_sme": [
+        "Is deactivating dormant customers intended, and why 36 months? The change is not saved by this script: who saves it?",
+        "Should customers with no last invoice date also be deactivated?"
+      ]
+    }
+  ],
+  "no_business_rule": [],
+  "glossary": [
+    {"technical_name": "AR_INVOICE.STS", "business_meaning": "Invoice status: O = open, W = written off"},
+    {"technical_name": "BAL_AMT", "business_meaning": "Balance still owed on the invoice"},
+    {"technical_name": "DUE_DT", "business_meaning": "Invoice due date"},
+    {"technical_name": "WRITEOFF_DT", "business_meaning": "Date the invoice was written off"},
+    {"technical_name": "CUST_MASTER.STS", "business_meaning": "Customer status: A = active, I = inactive"},
+    {"technical_name": "LAST_INV_DT", "business_meaning": "Date of the customer's last invoice"}
+  ]
+}

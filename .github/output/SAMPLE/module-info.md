@@ -1,0 +1,1 @@
+Accounts receivable. Works out what a customer owes on an invoice (late payment interest, regional tax), writes off small old balances, and holds the reminder letter settings.

@@ -1,0 +1,171 @@
+{
+  "work_item": "SAMPLE-003",
+  "flow_title": "Statement day and reminder letter settings",
+  "flow_summary": "Settings fix the day of the month for customer statements and control reminder letters: whether they are sent, the smallest balance that gets one, and the days late at which letters go out.",
+  "flow_purpose": "Lets the business set when statements are produced and when overdue customers are reminded, without changing code. The business team describes these as reminder letter settings.",
+  "starts_when": "Each time the accounts receivable module reads its settings, for statements and reminder letters.",
+  "inputs": ["Statement day of month setting", "Reminder letters on/off setting", "Minimum balance setting", "Letter days setting", "Customer balance", "Days late"],
+  "outputs": ["Day of the month for statements", "Decision whether a reminder letter is sent", "Days late at which each letter is sent"],
+  "users_and_roles": [{"role": "Not known from the code", "allowed_to": "Not known from the code"}],
+  "roles_basis": "unknown",
+  "preconditions": ["None found in the code."],
+  "flow_questions_for_sme": ["Which program reads these settings? No code in this module uses them, so how they are applied is not shown."],
+  "flow_steps": [
+    {"id": "S1", "kind": "start", "text": "Settings are read", "next": "S2"},
+    {"id": "S2", "kind": "step", "text": "Statements are produced on day 5 of the month", "rules": ["SAMPLE-003-R1"], "next": "S3"},
+    {"id": "S3", "kind": "decision", "text": "Are reminder letters switched on?", "rules": ["SAMPLE-003-R2"],
+     "branches": [{"label": "Yes", "to": "S4"}, {"label": "No", "to": "E1"}]},
+    {"id": "S4", "kind": "decision", "text": "Is the balance at least 25.00?", "rules": ["SAMPLE-003-R3"],
+     "branches": [{"label": "Yes", "to": "S5"}, {"label": "No", "to": "E2"}]},
+    {"id": "S5", "kind": "step", "text": "Send a letter at 30, 60 and 90 days late", "rules": ["SAMPLE-003-R4"], "next": "E3"},
+    {"id": "E1", "kind": "end", "text": "No reminder letters are sent"},
+    {"id": "E2", "kind": "end", "text": "No letter: balance below minimum"},
+    {"id": "E3", "kind": "end", "text": "Letters are sent on schedule"}
+  ],
+  "scenarios": [
+    {
+      "id": "SAMPLE-003-SC1",
+      "title": "Reminder letters sent at 30, 60 and 90 days",
+      "type": "main",
+      "when": ["Reminder letters are switched on.", "The balance is at least 25.00."],
+      "path": ["S1", "S2", "S3", "S4", "S5", "E3"],
+      "outcome": "The customer gets a letter at each of 30, 60 and 90 days late.",
+      "example": {
+        "inputs": {"Balance": "120.00", "Days late": "60"},
+        "steps": ["Letters are on", "120.00 is not below 25.00", "Letters are due at 30, 60, 90 days", "60 days late: the second letter is due"],
+        "result": "Second reminder letter is sent"
+      }
+    },
+    {
+      "id": "SAMPLE-003-SC2",
+      "title": "Reminder letters switched off",
+      "type": "alternate",
+      "when": ["The reminder letter switch is set to false."],
+      "path": ["S1", "S2", "S3", "E1"],
+      "outcome": "No reminder letters are sent to any customer.",
+      "user_sees": "Not known from the code",
+      "example": {
+        "inputs": {"Letters switch": "false", "Balance": "500.00", "Days late": "30"},
+        "steps": ["Letters are off"],
+        "result": "No letter is sent"
+      }
+    },
+    {
+      "id": "SAMPLE-003-SC3",
+      "title": "Balance too small for a letter",
+      "type": "alternate",
+      "when": ["Reminder letters are switched on.", "The balance is below 25.00."],
+      "path": ["S1", "S2", "S3", "S4", "E2"],
+      "outcome": "The customer is not sent a reminder letter.",
+      "user_sees": "Not known from the code",
+      "example": {
+        "inputs": {"Balance": "20.00", "Days late": "30"},
+        "steps": ["Letters are on", "20.00 is below 25.00"],
+        "result": "No letter is sent"
+      }
+    }
+  ],
+  "requirements": [
+    {"id": "SAMPLE-003-FR1", "text": "The system shall produce customer statements on day 5 of each month.", "rules": ["SAMPLE-003-R1"]},
+    {"id": "SAMPLE-003-FR2", "text": "The system shall send reminder letters only when the reminder letter switch is on.", "rules": ["SAMPLE-003-R2"]},
+    {"id": "SAMPLE-003-FR3", "text": "The system shall not send a reminder letter for a balance below 25.00.", "rules": ["SAMPLE-003-R3"]},
+    {"id": "SAMPLE-003-FR4", "text": "The system shall send reminder letters at 30, 60 and 90 days late.", "rules": ["SAMPLE-003-R4"]}
+  ],
+  "rules": [
+    {
+      "id": "SAMPLE-003-R1",
+      "title": "Statement day of the month",
+      "what_it_does": "Sets day 5 of each month as the day customer statements are produced.",
+      "business_reason": "Statements go out on one fixed day each month. The setting name suggests this; no comment confirms it.",
+      "reason_basis": "inferred",
+      "when_it_applies": ["Every month."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Statement day of month", "value": "ar.statement.day.of.month=5", "comes_from": "config"}
+      ],
+      "example": {
+        "inputs": {"Month": "March"},
+        "steps": ["Setting is 5", "Statements are produced on 5 March"],
+        "result": "Statement day = 5 March"
+      },
+      "exceptions": [],
+      "sources": [{"file": "sample/config/ar.properties", "start_line": 2, "end_line": 2}],
+      "covers": ["sample/config/ar.properties:2:config"],
+      "status": "unclear",
+      "questions_for_sme": ["What happens when day 5 is a weekend or holiday? Is the statement run moved?"]
+    },
+    {
+      "id": "SAMPLE-003-R2",
+      "title": "Reminder letters on or off",
+      "what_it_does": "Switches reminder letters on (true) or off for all customers.",
+      "business_reason": "The business team says the module holds the reminder letter settings. Why a switch is needed is not stated.",
+      "reason_basis": "unknown",
+      "when_it_applies": ["Before any reminder letter is considered."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Reminder letters enabled", "value": "ar.dunning.enabled=true", "comes_from": "config"}
+      ],
+      "example": {
+        "inputs": {"Switch": "true"},
+        "steps": ["Switch is true, so letters are allowed"],
+        "result": "Letters can be sent"
+      },
+      "exceptions": [],
+      "sources": [{"file": "sample/config/ar.properties", "start_line": 3, "end_line": 3}],
+      "covers": [],
+      "status": "unclear",
+      "questions_for_sme": ["Why can letters be switched off, and who decides? No code in this module reads the switch."]
+    },
+    {
+      "id": "SAMPLE-003-R3",
+      "title": "Minimum balance for a reminder letter",
+      "what_it_does": "Sets 25.00 as the balance below which no reminder letter is sent.",
+      "business_reason": "Not known from the code. It probably avoids letters for very small balances, but this is not shown.",
+      "reason_basis": "unknown",
+      "when_it_applies": ["Reminder letters are switched on."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Minimum balance for a letter", "value": "ar.dunning.min.balance=25.00", "comes_from": "config"},
+        {"name": "Customer balance", "value": "Amount the customer owes", "comes_from": "other_module"}
+      ],
+      "example": {
+        "inputs": {"Balance": "25.00"},
+        "steps": ["Setting is 25.00", "25.00 against 25.00: whether it counts is not known"],
+        "result": "Not known from the code"
+      },
+      "exceptions": [],
+      "sources": [{"file": "sample/config/ar.properties", "start_line": 4, "end_line": 4}],
+      "covers": [],
+      "status": "unclear",
+      "questions_for_sme": ["Is a balance of exactly 25.00 sent a letter? What currency is the limit in, and is it per invoice or per customer?"]
+    },
+    {
+      "id": "SAMPLE-003-R4",
+      "title": "Days late at which letters are sent",
+      "what_it_does": "Sets three letter points: 30, 60 and 90 days late.",
+      "business_reason": "Not known from the code. Letters at growing delays suggest escalating reminders, but this is not shown.",
+      "reason_basis": "unknown",
+      "when_it_applies": ["Reminder letters are switched on.", "The balance is not below the minimum."],
+      "how_it_is_calculated": "No calculation",
+      "values_used": [
+        {"name": "Days late for letters", "value": "ar.dunning.letter.after.days=30,60,90", "comes_from": "config"}
+      ],
+      "example": {
+        "inputs": {"Days late": "90"},
+        "steps": ["Letter points are 30, 60, 90", "90 is the third point"],
+        "result": "Third letter is due"
+      },
+      "exceptions": [],
+      "sources": [{"file": "sample/config/ar.properties", "start_line": 5, "end_line": 5}],
+      "covers": [],
+      "status": "unclear",
+      "questions_for_sme": ["Are the days counted from the invoice date or the due date? Is the wording of each letter different?"]
+    }
+  ],
+  "no_business_rule": [],
+  "glossary": [
+    {"technical_name": "dunning", "business_meaning": "Reminder letters sent to customers who have not paid"},
+    {"technical_name": "ar.dunning.min.balance", "business_meaning": "Smallest balance that gets a reminder letter"},
+    {"technical_name": "ar.dunning.letter.after.days", "business_meaning": "Days late at which each reminder letter is sent"}
+  ]
+}

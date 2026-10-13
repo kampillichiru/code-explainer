@@ -1,0 +1,41 @@
+{
+  "work_item": "SAMPLE-002",
+  "flow_title": "Old posting check for negative amounts",
+  "flow_summary": "An old routine receives an amount and writes the text \"neg\" to the console when the amount is below zero. It changes no amount, saves nothing and returns nothing. No other code in this module calls it.",
+  "flow_purpose": "Not known from the code",
+  "starts_when": "Never in this module: no other code calls it.",
+  "inputs": ["Amount"],
+  "outputs": ["None. A console message \"neg\" is written when the amount is below zero."],
+  "users_and_roles": [{"role": "Not known from the code", "allowed_to": "Not known from the code"}],
+  "roles_basis": "unknown",
+  "preconditions": ["None found in the code"],
+  "flow_questions_for_sme": ["Is the old posting routine still used, and what should happen to a negative amount?"],
+  "flow_steps": [
+    {"id": "S1", "kind": "start", "text": "Amount is received", "next": "S2"},
+    {"id": "S2", "kind": "step", "text": "Write \"neg\" to the console if amount is below zero", "next": "E1"},
+    {"id": "E1", "kind": "end", "text": "Nothing is returned or saved"}
+  ],
+  "scenarios": [
+    {
+      "id": "SAMPLE-002-SC1",
+      "title": "Negative amount is received",
+      "type": "main",
+      "when": ["The amount is below zero."],
+      "path": ["S1", "S2", "E1"],
+      "outcome": "The text \"neg\" is written to the console. Nothing else changes.",
+      "example": {
+        "inputs": {"Amount": "-250.00"},
+        "steps": ["-250.00 is below zero", "The text \"neg\" is written to the console"],
+        "result": "No amount is changed or returned"
+      }
+    }
+  ],
+  "requirements": [],
+  "rules": [],
+  "no_business_rule": [
+    {"item": "sample/src/com/acme/ar/InvProc.java:38:if", "reason": "Technical: only decides whether to write \"neg\" to the console. No amount, status or record changes."}
+  ],
+  "glossary": [
+    {"technical_name": "oldPost", "business_meaning": "Old routine that reports a negative amount on the console; its name suggests posting, but it posts nothing"}
+  ]
+}
