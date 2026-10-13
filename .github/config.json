@@ -1,0 +1,43 @@
+{
+  "source_root": ".",
+  "modules": {
+    "SAMPLE": [
+      "sample/src",
+      "sample/db",
+      "sample/config"
+    ]
+  },
+  "target_lines": 400,
+  "max_lines": 1200,
+  "item_kinds": [
+    "if",
+    "case",
+    "ternary",
+    "catch",
+    "sql",
+    "method",
+    "config"
+  ],
+  "runner": {
+    "command": [
+      "claude",
+      "-p",
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Glob,Grep,Write,Edit"
+    ],
+    "models": {
+      "extract": "sonnet",
+      "verify": "opus",
+      "resolve": "opus",
+      "overview": "opus",
+      "recheck": "sonnet"
+    },
+    "parallel": 3,
+    "max_calls_per_item": 6,
+    "timeout_minutes": 30
+  }
+}
