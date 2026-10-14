@@ -7,12 +7,14 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vendor"))
+# the parser library is kept in the pipeline folder (vendor/), two folders above this package
+PIPELINE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(PIPELINE, "vendor"))
 import javalang  # noqa: E402
 from javalang import tree as T  # noqa: E402
 
 SQL_RE = re.compile(r"\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM|MERGE\s+INTO|CALL)\b", re.I)
-FALLBACK_RE = {
+FALLBACK_RE = {  # for a file the parser cannot read
     "if": re.compile(r"\bif\s*\("),
     "case": re.compile(r"\bcase\b"),
     "catch": re.compile(r"\bcatch\s*\("),
@@ -47,6 +49,13 @@ def _tname(t):
         name = sub.name
         sub = getattr(sub, "sub_type", None)
     return name
+
+
+def _full_type(t):
+    """Type as written, without type arguments: 'BigDecimal', 'int[]'. None for 'void'."""
+    if t is None:
+        return None
+    return _tname(t) + "[]" * len(getattr(t, "dimensions", None) or [])
 
 
 def _line(node):
@@ -95,14 +104,53 @@ def _plain_body(tokens, tok_lines, start, end):
     return True
 
 
+ARITH_OPS = {"+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "%="}
+LOGIC_OPS = {">=", "<=", "==", "!=", "&&", "||"}  # '<' and '>' are left out: they also write generic types
+ASSIGN_OPS = {"=", "+=", "-=", "*=", "/=", "%="}
+MATH_CALLS = {"subtract", "multiply", "divide", "setScale", "negate", "remainder", "pow"}  # BigDecimal arithmetic
+UNARY_AFTER = {"(", ",", "[", "{", ":", "?"}
+
+
 def _token_items(tokens, kinds):
-    """Decision points and SQL statements found in the token list: (line, kind)."""
+    """Decision points, SQL statements, loops, calculations and fixed numbers in the token list: (line, kind, name).
+
+    A statement that already gave another item (an 'if', a ternary, an SQL string) gives no 'calc' item: the rule
+    for that item has to explain the whole line. 'name' is the variable a calculation or a fixed number is stored in.
+    """
+    tk = javalang.tokenizer
+    numbers = (tk.Integer, tk.DecimalInteger, tk.FloatingPoint)
+    decimals = {tokens[i + 1].value for i in range(len(tokens) - 1)
+                if tokens[i].value in ("BigDecimal", "BigInteger") and isinstance(tokens[i + 1], tk.Identifier)}
     out = []
+    depth, saved = 0, []  # round brackets open in the current statement; the counts of the enclosing blocks
+    for_wait, for_at, case_label = False, None, False
+
+    def fresh():
+        return {"other": 0, "calc": None, "plus": None, "text": False, "assign": None, "name": None}
+
+    def close(end):
+        """The statement ends at token 'end': it is a fixed number, a calculation, or neither."""
+        a = st["assign"]
+        if a is not None and tokens[a].value == "=":
+            value = tokens[a + 1:end]
+            if value and value[0].value in ("-", "+"):
+                value = value[1:]
+            if len(value) == 1 and isinstance(value[0], numbers):
+                if "constant" in kinds and st["name"] != "serialVersionUID":
+                    out.append((tokens[a].position[0], "constant", st["name"]))
+                return
+        line = st["calc"] or (None if st["text"] else st["plus"])  # '+' next to a text is joining, not adding
+        if line and not st["other"] and "calc" in kinds:
+            out.append((line, "calc", st["name"]))
+
+    st = fresh()
     for i, tok in enumerate(tokens):
         v = tok.value
         line = tok.position[0]
+        prev = tokens[i - 1] if i else None
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
         kind = None
-        if isinstance(tok, javalang.tokenizer.Keyword):
+        if isinstance(tok, tk.Keyword):
             if v == "if":
                 kind = "if"
             elif v == "case":
@@ -111,18 +159,64 @@ def _token_items(tokens, kinds):
                 kind = "catch"
             elif v in ("while", "for"):
                 kind = "loop"
-            elif v == "default" and i + 1 < len(tokens) and tokens[i + 1].value == ":":
+                for_wait = v == "for"
+            elif v == "default" and nxt is not None and nxt.value == ":":
                 kind = "case"
         elif v == "?":
-            prev = tokens[i - 1].value if i else ""
-            nxt = tokens[i + 1].value if i + 1 < len(tokens) else ""
-            wildcard = prev in ("<", ",") and nxt in (">", ",", "extends", "super", ">>", ">>>")
+            wildcard = prev is not None and nxt is not None and prev.value in ("<", ",") \
+                and nxt.value in (">", ",", "extends", "super", ">>", ">>>")
             if not wildcard:
                 kind = "ternary"
-        elif isinstance(tok, javalang.tokenizer.String) and SQL_RE.search(v):
-            kind = "sql"
+        elif isinstance(tok, tk.String):
+            st["text"] = True
+            if SQL_RE.search(v):
+                kind = "sql"
+        if kind == "case":
+            case_label = True
         if kind and kind in kinds:
-            out.append((line, kind))
+            out.append((line, kind, None))
+            st["other"] += 1
+
+        if isinstance(tok, tk.Separator):
+            if v == "(":
+                if for_wait:
+                    for_wait, for_at = False, depth
+                depth += 1
+            elif v == ")":
+                depth = max(0, depth - 1)
+                if for_at is not None and depth <= for_at:
+                    for_at = None
+            elif v == "{":
+                saved.append(depth)
+                depth, st = 0, fresh()
+            elif v == "}":
+                depth, st = (saved.pop() if saved else 0), fresh()
+            elif v == ";" and depth == 0:
+                close(i)
+                st = fresh()
+        elif isinstance(tok, tk.Operator):
+            if v == ":" and case_label:  # the code after 'case 1:' is a statement of its own
+                case_label, st = False, fresh()
+            elif for_at is None:  # the counter in the head of a 'for' is not a calculation
+                if v in ASSIGN_OPS and depth == 0 and st["assign"] is None:
+                    st["assign"] = i
+                    st["name"] = prev.value if isinstance(prev, tk.Identifier) else None
+                if v in ARITH_OPS:
+                    unary = v in ("+", "-") and (prev is None or prev.value in UNARY_AFTER
+                                                 or isinstance(prev, (tk.Operator, tk.Keyword)))
+                    if unary or (v == "*" and prev.value == "."):  # 'import java.util.*' is not a multiplication
+                        pass
+                    elif v in ("+", "+="):
+                        st["plus"] = st["plus"] or line
+                    else:
+                        st["calc"] = st["calc"] or line
+                elif v in LOGIC_OPS:
+                    st["calc"] = st["calc"] or line
+        elif isinstance(tok, tk.Identifier) and prev is not None and prev.value == "." \
+                and nxt is not None and nxt.value == "(":
+            # 'add' is also what a list does: it counts only on a variable declared as BigDecimal or BigInteger
+            if v in MATH_CALLS or (v == "add" and i >= 2 and tokens[i - 2].value in decimals):
+                st["calc"] = st["calc"] or line
     return out
 
 
@@ -141,6 +235,30 @@ def file_type(name, file_types=None):
     return None
 
 
+# Files of these types often hold business logic that this tool does not read: screens, scripts, rule files,
+# report and mail templates, other languages.
+LOGIC_EXTS = set(
+    ".jsp .jspx .jspf .tag .js .ts .html .htm .xhtml .vm .ftl .xsl .xslt .drl .bpmn .groovy .kt .scala .py .pl "
+    ".sh .ksh .bat .cmd .ps1 .cbl .cob .cpy .jcl .rpg .pls .plsql .bdy .spc .tab .vw .jrxml .rpt .csv .json "
+    ".ctl .dtsx".split()
+)
+
+
+def files_not_read(source_root, module_dirs, file_types=None, skip=None):
+    """Files in the module folders that no reader handles: {extension: [paths relative to source_root]}."""
+    found = {}
+    for module_dir in module_dirs:
+        for dirpath, _dirs, names in os.walk(module_dir):
+            if skip and dirpath.startswith(skip):
+                continue
+            for name in sorted(names):
+                if file_type(name, file_types) is None:
+                    ext = os.path.splitext(name)[1].lower() or "(no extension)"
+                    rel = os.path.relpath(os.path.join(dirpath, name), source_root).replace("\\", "/")
+                    found.setdefault(ext, []).append(rel)
+    return found
+
+
 def index_module(source_root, module_dirs, kinds, file_types=None):
     """Returns {files, classes, methods}. Paths are relative to source_root with '/'."""
     files, classes, methods = {}, {}, {}
@@ -148,6 +266,8 @@ def index_module(source_root, module_dirs, kinds, file_types=None):
         for dirpath, _dirs, names in os.walk(module_dir):
             for name in sorted(names):
                 kind = file_type(name, file_types)
+                if kind is None:
+                    continue  # reported by files_not_read
                 path = os.path.join(dirpath, name)
                 rel = os.path.relpath(path, source_root).replace("\\", "/")
                 if kind == "java":
@@ -171,6 +291,9 @@ SQL_LINE_RE = [  # first match wins
     ("if", re.compile(r"^\s*(IF|ELSIF|ELSEIF|ELSE\s+IF)\b", re.I)),
     ("case", re.compile(r"\bWHEN\b.*\bTHEN\b", re.I)),
     ("sql", re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE|CALL|EXEC|EXECUTE)\b", re.I)),
+    ("loop", re.compile(r"^\s*(LOOP\b|WHILE\b|FOR\b.*\bLOOP\b)", re.I)),
+    ("constant", re.compile(r"(:=|\bDEFAULT\b|^\s*SET\s+@\w+\s*=)\s*[-+]?\d[\d.]*\s*;", re.I)),
+    ("calc", re.compile(r"(:=|^\s*SET\s+@\w+\s*=).*([-+*/]|\b(ROUND|TRUNC|CEIL|FLOOR|ABS|MOD|POWER)\s*\()", re.I)),
 ]
 CALLABLE_SQL = ("PROCEDURE", "PROC", "FUNCTION", "PACKAGE", "PACKAGE BODY")
 KEY_RE = re.compile(r"^\s*([\w.\-]+)\s*[=:]")
@@ -311,6 +434,7 @@ def _index_file(path, rel, kinds, files, classes, methods):
                 selector_calls.add(id(sel))
 
     file_methods = []
+    top_level = {id(t) for t in unit.types or []}
     for _p, node in unit.filter(T.TypeDeclaration):
         simple = node.name
         fqn = (package + "." if package else "") + simple
@@ -330,6 +454,16 @@ def _index_file(path, rel, kinds, files, classes, methods):
             "simple": simple, "package": package, "file": rel, "parents": parents,
             "fields": fields, "imports": imports,
             "interface": isinstance(node, T.InterfaceDeclaration),
+            # what the execution check needs to know before it creates an object of this class
+            "plain_class": isinstance(node, T.ClassDeclaration) and id(node) in top_level
+            and "abstract" not in (node.modifiers or ()),
+            "extends": bool(ext),
+            "constructors": any(isinstance(mem, T.ConstructorDeclaration) for mem in members or []),
+            "init_blocks": any(isinstance(mem, (list, T.BlockStatement)) for mem in members or []),
+            "field_news": [_tname(c.type) for mem in members or [] if isinstance(mem, T.FieldDeclaration)
+                           for _q, c in mem.filter(T.ClassCreator)],
+            "field_calls": [[c.qualifier or "", c.member] for mem in members or [] if isinstance(mem, T.FieldDeclaration)
+                            for _q, c in mem.filter(T.MethodInvocation)],
         }
         for mem in members or []:
             if not isinstance(mem, (T.MethodDeclaration, T.ConstructorDeclaration)):
@@ -354,6 +488,11 @@ def _index_file(path, rel, kinds, files, classes, methods):
                 "file": rel, "start": start, "end": end, "nparams": len(mem.parameters),
                 "private": "private" in (mem.modifiers or ()), "has_body": has_body,
                 "calls": calls, "vars": variables, "items": [], "trivial": False,
+                "static": "static" in (mem.modifiers or ()), "abstract": "abstract" in (mem.modifiers or ()),
+                "constructor": isinstance(mem, T.ConstructorDeclaration),
+                "params": [[p.name, _full_type(p.type) + ("..." if p.varargs else "")] for p in mem.parameters],
+                "returns": _full_type(getattr(mem, "return_type", None)),
+                "news": [_tname(c.type) for _q, c in mem.filter(T.ClassCreator)],
             }
             methods[m["id"]] = m
             file_methods.append(m)
@@ -361,12 +500,22 @@ def _index_file(path, rel, kinds, files, classes, methods):
     # give every decision point to the smallest method that contains its line
     leftovers = []
     per_method = {}
-    for line, kind in _token_items(tokens, kinds):
-        best = None
-        for m in file_methods:
-            if m["start"] <= line <= m["end"]:
-                if best is None or (m["end"] - m["start"]) < (best["end"] - best["start"]):
-                    best = m
+
+    def holder(line):
+        inside = [m for m in file_methods if m["start"] <= line <= m["end"]]
+        return min(inside, key=lambda m: m["end"] - m["start"]) if inside else None
+
+    used_at = {}  # name -> lines where it is written
+    for tok in tokens:
+        if isinstance(tok, javalang.tokenizer.Identifier):
+            used_at.setdefault(tok.value, []).append(tok.position[0])
+    for line, kind, name in _token_items(tokens, kinds):
+        best = holder(line)
+        if best is not None and kind == "constant":
+            continue  # a number put into a local variable: the rule that uses it explains it
+        if best is None and name and kind in ("constant", "calc"):
+            # a field of the class: it belongs to the first code in this file that uses it
+            best = next((m for m in map(holder, used_at.get(name, ())) if m is not None), None)
         if best is None:
             leftovers.append((line, kind))
         else:
@@ -377,7 +526,7 @@ def _index_file(path, rel, kinds, files, classes, methods):
             if inside:
                 min(inside, key=lambda m: m["end"] - m["start"]).setdefault("strings", set()).add(tok.value[1:-1])
     for m in file_methods:
-        m["items"] = _make_items(rel, src_lines, per_method.get(m["id"], []))
+        m["items"] = _make_items(rel, src_lines, sorted(per_method.get(m["id"], []), key=lambda p: p[0]))
         length = m["end"] - m["start"] + 1
         accessor = re.match(r"(get|set|is)[A-Z_]", m["name"]) and length <= 4
         if not m["items"]:

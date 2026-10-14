@@ -11,6 +11,8 @@ You are the second reviewer. Another reviewer wrote the rules file. Assume it ma
    - Is the formula correct, with the right order, rounding and exact values?
    - Calculate the example again yourself from the code. Is the result right?
    - Are exceptions missing?
+   - For a rule that covers a loop: is it right about what is repeated, over which records, and when it stops early?
+   - For a rule that covers a fixed number: is the number, with its unit, the one in the code?
    - `values_used`: is every value listed, with the right origin and the exact fixed value, table and column?
    - `business_reason`: if `reason_basis` is `stated`, does the comment, message or business note really say it? If it is `inferred`, does the code support it? A reason that sounds likely but has no support in the code is a `disagree`.
 3. Check the flow (`flow_purpose`, `starts_when`, `inputs`, `flow_steps`) against the code and give one `flow_verdict`:
@@ -24,6 +26,7 @@ You are the second reviewer. Another reviewer wrote the rules file. Assume it ma
    - Is the `type` right (`main`, `alternate`, `exception`), and does `user_sees` match what the code gives back?
    - Is a real case missing, for example a combination of conditions that gives a different result? Report it under `missed_rules`.
 5. Check each requirement and give one verdict for each: does the code really do what the statement says, with the same conditions, values and units? A statement that says more than the code does is a `disagree`.
+   You do not check `code_runs`: a tool ran the code with those inputs, so their results are facts. Use them. A rule, a requirement or a scenario that does not agree with the result of a code run is a `disagree`.
 6. Check each entry in `no_business_rule`. If the code at that line changes a business result, report it under `missed_rules`.
 7. Report any business behaviour in the code that no rule describes under `missed_rules`.
 8. Do not edit the rules file. Write your result to the path in `verify_file`, in the format below.

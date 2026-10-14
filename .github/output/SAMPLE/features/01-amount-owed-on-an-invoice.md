@@ -2,6 +2,8 @@
 
 Part of [SAMPLE - business logic](../SAMPLE-business-logic.md). Every id on this page is a link.
 
+> **DRAFT - NOT READY TO USE AS REQUIREMENTS.** This feature has not passed the second check (state: EXTRACTED). It may be wrong.
+
 ## Overview
 
 Works out the total a customer owes on one invoice. It adds late payment interest when the invoice is paid late enough, then adds regional tax, and rounds the total to 2 decimals. It rejects unknown or inactive customers.

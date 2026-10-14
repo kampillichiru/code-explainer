@@ -1,10 +1,14 @@
-# SAMPLE - Business logic of the current system
+# SAMPLE - Business logic of the current system (DRAFT)
+
+> **DRAFT - NOT READY TO USE AS REQUIREMENTS.** 4 of 4 work items have not passed the second check: SAMPLE-001 (EXTRACTED), SAMPLE-002 (EXTRACTED), SAMPLE-003 (EXTRACTED), SAMPLE-004 (EXTRACTED). Their text has not been compared with the code by a second reviewer and may be wrong. Run the pipeline again to finish them; finished work items are skipped.
+
+Business domain: **Accounts receivable**
 
 This document describes what the current system does. It was produced from the source code.
 
 How to read it: this page is the summary. Chapter 2 lists each feature with its functional requirements. The title of a feature is a link to its own page, with the business rules, the flow diagram, the scenarios and the worked examples. Every id (**FR** = functional requirement, **BR** = business rule, **SC** = scenario) is a link. Appendix A links every requirement to its rule and to the lines of code.
 
-Status marks: **Code-checked** = passed the automatic checks. **Second check** = a second, independent review agreed. **SME confirmed** = to be ticked by the business expert.
+Status marks: **Code-checked** = passed the automatic checks. **Run against the code** = the code was run with the inputs of an example and returned the documented result (only for code that can be run on its own). **Second check** = a second, independent review agreed. **SME confirmed** = to be ticked by the business expert.
 
 ## 1. Module overview
 
@@ -16,6 +20,7 @@ Not written yet. It is written when all features are documented.
 | Functional requirements | 17 |
 | Business rules | 13 |
 | Scenarios (ways through a feature, from start to end) | 11 |
+| Examples checked by running the code | 0 |
 | Open questions for the SME | 18 |
 
 ## 2. Features
@@ -132,6 +137,10 @@ Values that are written in the code itself. To change one of them today, the cod
 - BR-11: Why is the cap 1,000, and what should happen when it is exceeded: who is told and how are the invoices handled afterwards?
 - BR-13: Is deactivating dormant customers intended, and why 36 months? The change is not saved by this script: who saves it?
 - BR-13: Should customers with no last invoice date also be deactivated?
+
+## 6. Files that were not read
+
+None. Every file in the module folders was read.
 
 ## Appendix A. From each requirement to its rule, its scenarios and the code
 

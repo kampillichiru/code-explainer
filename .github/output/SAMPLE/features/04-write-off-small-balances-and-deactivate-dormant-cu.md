@@ -2,6 +2,8 @@
 
 Part of [SAMPLE - business logic](../SAMPLE-business-logic.md). Every id on this page is a link.
 
+> **DRAFT - NOT READY TO USE AS REQUIREMENTS.** This feature has not passed the second check (state: EXTRACTED). It may be wrong.
+
 ## Overview
 
 A nightly run writes off small, long-overdue open invoices, but stops and undoes everything if more than 1,000 would be written off. A separate script marks customers inactive when they have had no invoice for 36 months.

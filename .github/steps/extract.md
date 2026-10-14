@@ -7,9 +7,14 @@ The work item JSON file named in the chat. It contains:
 - `entry_points`: where this flow starts in the code.
 - `methods_to_document`: the code you must explain (file, start line, end line).
 - `context_methods`: code that is called from there. Read it when you need it to understand a value. It is documented in another work item, so do not write rules for it.
-- `items_to_cover`: every condition, SQL statement and calculation in the code you must explain. Each one has an `id`.
+- `items_to_cover`: every condition, loop, calculation, fixed number, SQL statement and error handler in the code you must explain. Each one has an `id` and a `kind`:
+  - `loop`: say what is repeated (for each invoice line, for each customer), over which records, and what makes it stop early. The diagram still shows it as one box.
+  - `calc`: a line that calculates or compares. Give the formula in `how_it_is_calculated`, in the order the code applies it, with the rounding.
+  - `constant`: a fixed number stored under a name. Its line can be outside the code you document (a field at the top of the file): read that line, list the number in `values_used` as `fixed`, and include the line in `sources`.
+  - A `loop`, `calc` or `constant` that changes no business result (a counter, a position in a text, a buffer size, a retry wait) goes to `no_business_rule` with the reason.
 - `calls_to_other_modules`: calls that leave this module. Mention them by name; do not guess what they do.
 - Some entries are not Java. `PROCEDURE ...`, `FUNCTION ...`, `TRIGGER ...`, `VIEW ...` or `(script)` is a part of an SQL file. `(settings)` is a block of a configuration file: its one item stands for every setting in those lines, so read them all, write a rule for each setting that changes a business result, and cover the item with those rules. Mark the item `no_business_rule` only if every setting in the block is technical.
+- `runnable_methods`: code that a tool can run on its own, because it takes and returns plain values and touches no database, file or other system. For each one you give inputs and the result you expect (`code_runs`, see step 10). The tool then runs the real code. The list is often empty.
 - `kind`: if it is `unreached`, no other code in this module calls this code. Document it anyway.
 
 ## What to do
@@ -40,9 +45,11 @@ The work item JSON file named in the chat. It contains:
    - `preconditions`: what must be true before the flow can run, for example "The customer exists and is active". Write "None found in the code" if there is none.
    - `outputs`: what comes out, in business names, for example "Total amount to collect, rounded to 2 decimals".
 9. Go through `items_to_cover` one by one. Each `id` must appear either in the `covers` list of one rule, or in `no_business_rule` with a reason (for example: technical check, logging, closing a database connection).
-10. Write the result to the path in `rules_file`, in the format below.
-11. Run `python explain.py validate <work item id>`. If it reports problems, fix the rules file and run it again until it passes.
-12. Reply with a short summary: number of requirements, number of scenarios, number of rules, number of unclear rules, and the questions for the SME.
+10. For each entry in `runnable_methods`, write at least one entry in `code_runs`; if the code has a condition, write one for each side of it. Choose inputs that show a business case (for example 30 days late, and 3 days late). In `args` give one plain value for each parameter, in the order shown: numbers without separators or units (`"10000.00"`), dates as `"2024-01-31"` or `"2024-01-31 14:30:00"`, `null` for no value. In `expected` give the result you worked out from the code: a plain value, or `"throws IllegalArgumentException"` when the code rejects the inputs. In `rule` give the rule the run is an example of. If `runnable_methods` is empty, leave `code_runs` out.
+    The tool runs the code. When the code returns something else than your `expected`, the code is right and your reading was not: correct `expected`, then read the rule again and correct its conditions, formula, rounding and example where they led you to the wrong result. Do not only copy the number.
+11. Write the result to the path in `rules_file`, in the format below.
+12. Run `python explain.py validate <work item id>`. If it reports problems, fix the rules file and run it again until it passes.
+13. Reply with a short summary: number of requirements, number of scenarios, number of rules, number of unclear rules, and the questions for the SME.
 
 ## Keep it short
 
@@ -140,6 +147,10 @@ Two more rules:
       "questions_for_sme": []
     }
   ],
+  "code_runs": [
+    {"id": "AR-003-X1", "method": "Calc2.calcAmt2(BigDecimal, BigDecimal, long)", "args": ["10000.00", "0.12", 30],
+     "expected": "98.63013", "rule": "AR-003-R2"}
+  ],
   "no_business_rule": [
     {"item": "src/com/acme/ar/CustDao.java:9:method", "reason": "Technical: opens the database connection."}
   ],
@@ -156,6 +167,7 @@ Rules for the format:
 - `scenarios`: `path` lists the box ids in order. It begins at a `start` box, follows the arrows, and stops at an `end` box. `type` is `main`, `alternate` or `exception`. An `alternate` or `exception` scenario also has `user_sees`.
 - `requirements`: `id` is the work item id plus `-FR1`, `-FR2`, and so on. `text` is one "shall" statement. `rules` lists the rule ids it rests on. A file with no rules has no requirements.
 - `users_and_roles`: each entry has `role` and `allowed_to`. `roles_basis` is `stated`, `inferred` or `unknown`. - `flow_questions_for_sme`: questions about the flow as a whole. Questions about one rule go into that rule.
+- `code_runs`: `id` is the work item id plus `-X1`, `-X2`, and so on. `method` is copied exactly from `runnable_methods`. `expected` is the exact result of that code, before any rounding that happens later in the flow.
 - `how_it_is_calculated`: write "No calculation" if the rule only decides something.
 - `values_used`: `comes_from` is one of `input`, `database`, `fixed`, `calculated`, `config`, `other_module`, `system`. For `config` give the setting name and its value, not the file name (the file goes into `sources`). For `database` give table and column. For `fixed` give the exact value from the code. For `calculated` give the formula.
 - `reason_basis` is `stated`, `inferred` or `unknown`. With `unknown`, add a question to `questions_for_sme`.

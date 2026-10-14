@@ -14,10 +14,21 @@
     "case",
     "ternary",
     "catch",
+    "loop",
+    "calc",
+    "constant",
     "sql",
     "method",
     "config"
   ],
+  "execution": {
+    "enabled": true,
+    "javac": "javac",
+    "java": "java",
+    "classpath": [],
+    "encoding": "",
+    "timeout_seconds": 20
+  },
   "runner": {
     "command": [
       "claude",
@@ -34,10 +45,13 @@
       "verify": "opus",
       "resolve": "opus",
       "overview": "opus",
-      "recheck": "sonnet"
+      "recheck": "sonnet",
+      "calibrate": "opus"
     },
     "parallel": 3,
     "max_calls_per_item": 6,
-    "timeout_minutes": 30
+    "timeout_minutes": 30,
+    "runner_failures_before_stop": 3,
+    "retry_wait_seconds": 30
   }
 }

@@ -2,6 +2,8 @@
 
 Part of [SAMPLE - business logic](../SAMPLE-business-logic.md). Every id on this page is a link.
 
+> **DRAFT - NOT READY TO USE AS REQUIREMENTS.** This feature has not passed the second check (state: EXTRACTED). It may be wrong.
+
 > Note: no other code in this module calls this code. Confirm if it is still used.
 
 ## Overview

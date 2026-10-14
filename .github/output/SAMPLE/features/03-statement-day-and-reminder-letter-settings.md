@@ -2,6 +2,8 @@
 
 Part of [SAMPLE - business logic](../SAMPLE-business-logic.md). Every id on this page is a link.
 
+> **DRAFT - NOT READY TO USE AS REQUIREMENTS.** This feature has not passed the second check (state: EXTRACTED). It may be wrong.
+
 ## Overview
 
 Settings fix the day of the month for customer statements and control reminder letters: whether they are sent, the smallest balance that gets one, and the days late at which letters go out.
